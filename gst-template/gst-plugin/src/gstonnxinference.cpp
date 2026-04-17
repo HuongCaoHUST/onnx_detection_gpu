@@ -155,10 +155,15 @@ gst_onnxinference_start (GstBaseTransform * base)
     filter->env = new Ort::Env(ORT_LOGGING_LEVEL_WARNING, "YOLO11");
     Ort::SessionOptions session_options;
     
-    // Enable CUDA provider
-    OrtCUDAProviderOptions cuda_options;
-    cuda_options.device_id = 0;
-    session_options.AppendExecutionProvider_CUDA(cuda_options);
+    // Enable CUDA provider if available, otherwise fallback to CPU
+    try {
+      OrtCUDAProviderOptions cuda_options;
+      cuda_options.device_id = 0;
+      session_options.AppendExecutionProvider_CUDA(cuda_options);
+      GST_INFO_OBJECT (filter, "Using CUDA execution provider");
+    } catch (const Ort::Exception& e) {
+      GST_WARNING_OBJECT (filter, "CUDA provider not available (%s). Using CPU instead.", e.what());
+    }
     
     filter->session = new Ort::Session(*filter->env, filter->model_location, session_options);
     filter->allocator = new Ort::AllocatorWithDefaultOptions();

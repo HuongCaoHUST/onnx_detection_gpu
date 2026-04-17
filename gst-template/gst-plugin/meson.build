@@ -13,7 +13,12 @@ gstaudio_dep = dependency('gstreamer-audio-1.0',
     fallback: ['gst-plugins-base', 'audio_dep'])
 
 opencv_dep = dependency('opencv4', required: true)
-onnxruntime_dep = dependency('onnxruntime', required: true)
+# Use the newer version found in /opt/onnxruntime
+ort_root = '/opt/onnxruntime'
+ort_lib_dir = join_paths(ort_root, 'lib')
+ort_inc = include_directories(join_paths(ort_root, 'include'))
+ort_lib = cc.find_library('onnxruntime', dirs : ort_lib_dir, required: true)
+onnxruntime_dep = declare_dependency(include_directories: ort_inc, dependencies: ort_lib)
 
 # Plugin 1
 plugin_sources = [

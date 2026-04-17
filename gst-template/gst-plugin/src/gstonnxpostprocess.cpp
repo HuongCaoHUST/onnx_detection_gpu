@@ -146,6 +146,8 @@ gst_onnxpostprocess_transform_ip (GstBaseTransform * base, GstBuffer * outbuf)
   std::vector<int> indices;
   cv::dnn::NMSBoxes(boxes, confidences, CONFIDENCE_THRESHOLD, NMS_THRESHOLD, indices);
 
+  GST_INFO_OBJECT (base, "Detected %zu objects", indices.size());
+
   cv::Mat frame(INPUT_HEIGHT, INPUT_WIDTH, CV_8UC3, img_map.data);
 
   for (int idx : indices) {
