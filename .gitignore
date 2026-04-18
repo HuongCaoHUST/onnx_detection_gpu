@@ -1,1 +1,4 @@
 *.mp4
+gst-plugin-mlpostprocess
+gst-plugin-overlay
+gst-plugin-vcomposer

@@ -49,7 +49,8 @@ static void gst_onnxinference_finalize (GObject * object);
 
 static gboolean gst_onnxinference_start (GstBaseTransform * base);
 static gboolean gst_onnxinference_stop (GstBaseTransform * base);
-static GstFlowReturn gst_onnxinference_transform_ip (GstBaseTransform * base, GstBuffer * outbuf);
+static gboolean gst_onnxinference_transform_size (GstBaseTransform * base, GstPadDirection direction, GstCaps * caps, gsize size, GstCaps * othercaps, gsize * othersize);
+static GstFlowReturn gst_onnxinference_transform (GstBaseTransform * base, GstBuffer * inbuf, GstBuffer * outbuf);
 
 static void
 gst_onnxinference_class_init (GstonnxinferenceClass * klass)
@@ -78,7 +79,8 @@ gst_onnxinference_class_init (GstonnxinferenceClass * klass)
 
   basetransform_class->start = GST_DEBUG_FUNCPTR (gst_onnxinference_start);
   basetransform_class->stop = GST_DEBUG_FUNCPTR (gst_onnxinference_stop);
-  basetransform_class->transform_ip = GST_DEBUG_FUNCPTR (gst_onnxinference_transform_ip);
+  basetransform_class->transform_size = GST_DEBUG_FUNCPTR (gst_onnxinference_transform_size);
+  basetransform_class->transform = GST_DEBUG_FUNCPTR (gst_onnxinference_transform);
 
   GST_DEBUG_CATEGORY_INIT (gst_onnxinference_debug, "onnxinference", 0, "onnxinference element");
 }
@@ -181,17 +183,25 @@ static gboolean
 gst_onnxinference_stop (GstBaseTransform * base)
 {
   Gstonnxinference *filter = GST_ONNXINFERENCE (base);
-  
+
   if (filter->session) { delete filter->session; filter->session = NULL; }
   if (filter->env) { delete filter->env; filter->env = NULL; }
   if (filter->memory_info) { delete filter->memory_info; filter->memory_info = NULL; }
   if (filter->allocator) { delete filter->allocator; filter->allocator = NULL; }
-  
+
+  return TRUE;
+}
+
+static gboolean
+gst_onnxinference_transform_size (GstBaseTransform * base, GstPadDirection direction, GstCaps * caps, gsize size, GstCaps * othercaps, gsize * othersize)
+{
+  // Output size is same as input (we pass through the image with tensor appended)
+  *othersize = size;
   return TRUE;
 }
 
 static GstFlowReturn
-gst_onnxinference_transform_ip (GstBaseTransform * base, GstBuffer * outbuf)
+gst_onnxinference_transform (GstBaseTransform * base, GstBuffer * inbuf, GstBuffer * outbuf)
 {
   Gstonnxinference *filter = GST_ONNXINFERENCE (base);
 
@@ -199,14 +209,24 @@ gst_onnxinference_transform_ip (GstBaseTransform * base, GstBuffer * outbuf)
     return GST_FLOW_ERROR;
   }
 
-  GstMapInfo map;
-  if (!gst_buffer_map (outbuf, &map, GST_MAP_READ)) {
-      GST_ERROR_OBJECT (filter, "Failed to map buffer for reading");
+  GstMapInfo in_map;
+  if (!gst_buffer_map (inbuf, &in_map, GST_MAP_READ)) {
+      GST_ERROR_OBJECT (filter, "Failed to map input buffer for reading");
       return GST_FLOW_ERROR;
   }
 
+  GstMapInfo out_map;
+  if (!gst_buffer_map (outbuf, &out_map, GST_MAP_WRITE)) {
+      GST_ERROR_OBJECT (filter, "Failed to map output buffer for writing");
+      gst_buffer_unmap (inbuf, &in_map);
+      return GST_FLOW_ERROR;
+  }
+
+  // Copy input image to output image
+  memcpy (out_map.data, in_map.data, in_map.size);
+
   try {
-      cv::Mat frame(INPUT_HEIGHT, INPUT_WIDTH, CV_8UC3, map.data);
+      cv::Mat frame(INPUT_HEIGHT, INPUT_WIDTH, CV_8UC3, in_map.data);
 
       cv::Mat blob;
       frame.convertTo(blob, CV_32F, 1.0f / 255.0f);
@@ -243,17 +263,16 @@ gst_onnxinference_transform_ip (GstBaseTransform * base, GstBuffer * outbuf)
       float* tensor_copy = (float*) g_malloc(tensor_size_bytes);
       memcpy(tensor_copy, output_data, tensor_size_bytes);
       
-      gst_buffer_unmap (outbuf, &map);
+      gst_buffer_unmap (outbuf, &out_map);
+      gst_buffer_unmap (inbuf, &in_map);
       
-      // Make writable if necessary
-      outbuf = gst_buffer_make_writable(outbuf);
-      
-      GstMemory *out_mem = gst_memory_new_wrapped ((GstMemoryFlags)0, tensor_copy, tensor_size_bytes, 0, tensor_size_bytes, tensor_copy, g_free);
-      gst_buffer_append_memory (outbuf, out_mem);
+      GstMemory *tensor_mem = gst_memory_new_wrapped ((GstMemoryFlags)0, tensor_copy, tensor_size_bytes, 0, tensor_size_bytes, tensor_copy, g_free);
+      gst_buffer_append_memory (outbuf, tensor_mem);
       
   } catch (const std::exception& e) {
       GST_ERROR_OBJECT (filter, "Inference exception: %s", e.what());
-      gst_buffer_unmap (outbuf, &map);
+      gst_buffer_unmap (outbuf, &out_map);
+      gst_buffer_unmap (inbuf, &in_map);
       return GST_FLOW_ERROR;
   }
 

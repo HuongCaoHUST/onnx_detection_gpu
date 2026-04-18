@@ -73,3 +73,17 @@ gstonnxpostprocessexample = library('gstonnxpostprocess',
   install : true,
   install_dir : plugins_install_dir,
 )
+
+# The onnxoverlay Plugin
+gstonnxoverlay_sources = [
+  'src/gstonnxoverlay.cpp',
+]
+
+gstonnxoverlayexample = library('gstonnxoverlay',
+  gstonnxoverlay_sources,
+  c_args: plugin_c_args,
+  cpp_args: plugin_c_args,
+  dependencies : [gst_dep, gstbase_dep, opencv_dep],
+  install : true,
+  install_dir : plugins_install_dir,
+)

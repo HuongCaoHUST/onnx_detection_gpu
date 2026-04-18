@@ -1,0 +1,257 @@
+/*
+ * GStreamer
+ * Copyright (C) 2026 HuongCao <<user@hostname.org>>
+ */
+
+#ifdef HAVE_CONFIG_H
+#  include <config.h>
+#endif
+
+#include <gst/gst.h>
+#include <opencv2/opencv.hpp>
+#include "gstonnxoverlay.h"
+#include "gstonnxmeta.h"
+
+#include <queue>
+#include <mutex>
+
+GST_DEBUG_CATEGORY_STATIC (gst_onnxoverlay_debug);
+#define GST_CAT_DEFAULT gst_onnxoverlay_debug
+
+// Pad templates
+static GstStaticPadTemplate sink_template = GST_STATIC_PAD_TEMPLATE ("sink",
+    GST_PAD_SINK,
+    GST_PAD_ALWAYS,
+    GST_STATIC_CAPS ("video/x-raw, format=(string){ RGB, BGR, RGBx, BGRx }")
+    );
+
+static GstStaticPadTemplate sink_meta_template = GST_STATIC_PAD_TEMPLATE ("sink_meta",
+    GST_PAD_SINK,
+    GST_PAD_REQUEST,
+    GST_STATIC_CAPS ("ANY")
+    );
+
+static GstStaticPadTemplate src_template = GST_STATIC_PAD_TEMPLATE ("src",
+    GST_PAD_SRC,
+    GST_PAD_ALWAYS,
+    GST_STATIC_CAPS ("video/x-raw, format=(string){ RGB, BGR, RGBx, BGRx }")
+    );
+
+#define gst_onnxoverlay_parent_class parent_class
+G_DEFINE_TYPE (Gstonnxoverlay, gst_onnxoverlay, GST_TYPE_ELEMENT);
+GST_ELEMENT_REGISTER_DEFINE (onnxoverlay, "onnxoverlay", GST_RANK_NONE,
+    GST_TYPE_ONNXOVERLAY);
+
+// Forward declarations
+static GstFlowReturn gst_onnxoverlay_sink_chain (GstPad * pad, GstObject * parent, GstBuffer * buf);
+static GstFlowReturn gst_onnxoverlay_sink_meta_chain (GstPad * pad, GstObject * parent, GstBuffer * buf);
+static gboolean gst_onnxoverlay_sink_event (GstPad * pad, GstObject * parent, GstEvent * event);
+static gboolean gst_onnxoverlay_src_event (GstPad * pad, GstObject * parent, GstEvent * event);
+static GstPad * gst_onnxoverlay_request_new_pad (GstElement * element,
+    GstPadTemplate * templ, const gchar * name, const GstCaps * caps);
+
+static void
+gst_onnxoverlay_class_init (GstonnxoverlayClass * klass)
+{
+  GstElementClass *gstelement_class = (GstElementClass *) klass;
+
+  gst_element_class_add_static_pad_template (gstelement_class, &sink_template);
+  gst_element_class_add_static_pad_template (gstelement_class, &sink_meta_template);
+  gst_element_class_add_static_pad_template (gstelement_class, &src_template);
+
+  gst_element_class_set_details_simple (gstelement_class,
+      "ONNX Overlay", "Filter/Editor/Video",
+      "Overlays detection metadata on video (non-blocking)", "HuongCao <<user@hostname.org>>");
+
+  gstelement_class->request_new_pad = gst_onnxoverlay_request_new_pad;
+
+  GST_DEBUG_CATEGORY_INIT (gst_onnxoverlay_debug, "onnxoverlay", 0, "ONNX Overlay");
+}
+
+static void
+gst_onnxoverlay_init (Gstonnxoverlay * filter)
+{
+  filter->sink_pad = gst_pad_new_from_static_template (&sink_template, "sink");
+  gst_pad_set_chain_function (filter->sink_pad, gst_onnxoverlay_sink_chain);
+  gst_pad_set_event_function (filter->sink_pad, gst_onnxoverlay_sink_event);
+  gst_element_add_pad (GST_ELEMENT (filter), filter->sink_pad);
+
+  // Meta pad created on request
+  filter->sink_meta_pad = NULL;
+
+  filter->src_pad = gst_pad_new_from_static_template (&src_template, "src");
+  gst_pad_set_event_function (filter->src_pad, gst_onnxoverlay_src_event);
+  gst_element_add_pad (GST_ELEMENT (filter), filter->src_pad);
+
+  // Initialize metadata queue
+  filter->meta_queue = new std::queue<GstBuffer*>();
+  filter->meta_queue_lock = new std::mutex();
+  filter->meta_thread = NULL;
+  filter->stop_thread = FALSE;
+}
+
+static GstPad *
+gst_onnxoverlay_request_new_pad (GstElement * element,
+    GstPadTemplate * templ, const gchar * name, const GstCaps * caps)
+{
+  Gstonnxoverlay *filter = GST_ONNXOVERLAY (element);
+
+  if (templ == gst_element_class_get_pad_template (GST_ELEMENT_GET_CLASS (element), "sink_meta")) {
+    if (!filter->sink_meta_pad) {
+      filter->sink_meta_pad = gst_pad_new_from_template (templ, "sink_meta");
+      gst_pad_set_chain_function (filter->sink_meta_pad, gst_onnxoverlay_sink_meta_chain);
+      gst_pad_set_event_function (filter->sink_meta_pad, gst_onnxoverlay_sink_event);
+      gst_element_add_pad (element, filter->sink_meta_pad);
+      return filter->sink_meta_pad;
+    }
+  }
+  return NULL;
+}
+
+static GstFlowReturn
+gst_onnxoverlay_sink_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
+{
+  Gstonnxoverlay *filter = GST_ONNXOVERLAY (parent);
+  GstBuffer *meta_buf = NULL;
+
+  // Check if there's a metadata buffer in queue (non-blocking)
+  {
+    std::lock_guard<std::mutex> lock(*filter->meta_queue_lock);
+    if (!filter->meta_queue->empty()) {
+      meta_buf = filter->meta_queue->front();
+      filter->meta_queue->pop();
+    }
+  }
+
+  // Get video caps
+  GstCaps *caps = gst_pad_get_current_caps (pad);
+  if (caps) {
+    GstStructure *s = gst_caps_get_structure (caps, 0);
+    int width = 0, height = 0;
+    const gchar *format = gst_structure_get_string (s, "format");
+
+    if (gst_structure_get_int (s, "width", &width) &&
+        gst_structure_get_int (s, "height", &height)) {
+
+      GstMapInfo map;
+      buf = gst_buffer_make_writable (buf);
+
+      if (gst_buffer_map (buf, &map, (GstMapFlags)GST_MAP_READWRITE)) {
+        int channels = (g_str_has_suffix (format, "x")) ? 4 : 3;
+        cv::Mat img(height, width, (channels == 4) ? CV_8UC4 : CV_8UC3, map.data);
+
+        if (meta_buf) {
+          GstMeta *meta;
+          gpointer state = NULL;
+
+          double scale_x = (double)width / 640.0;
+          double scale_y = (double)height / 640.0;
+
+          GST_DEBUG_OBJECT (filter, "Overlaying %d metadata items on video frame",
+              gst_buffer_n_memory (meta_buf));
+
+          while ((meta = gst_buffer_iterate_meta (meta_buf, &state))) {
+            if (meta->info->api == GST_ONNX_META_API_TYPE) {
+              GstOnnxMeta *ometa = (GstOnnxMeta *) meta;
+
+              int x = (int)(ometa->x * scale_x);
+              int y = (int)(ometa->y * scale_y);
+              int w = (int)(ometa->w * scale_x);
+              int h = (int)(ometa->h * scale_y);
+
+              cv::rectangle(img, cv::Rect(x, y, w, h), cv::Scalar(0, 255, 0), 2);
+              if (ometa->label) {
+                cv::putText(img, ometa->label, cv::Point(x, y - 5),
+                    cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 1);
+              }
+            }
+          }
+        } else {
+          GST_DEBUG_OBJECT (filter, "No metadata available, outputting video as-is");
+        }
+        gst_buffer_unmap (buf, &map);
+      }
+    }
+    gst_caps_unref (caps);
+  }
+
+  if (meta_buf) {
+    gst_buffer_unref (meta_buf);
+  }
+
+  return gst_pad_push (filter->src_pad, buf);
+}
+
+static GstFlowReturn
+gst_onnxoverlay_sink_meta_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
+{
+  Gstonnxoverlay *filter = GST_ONNXOVERLAY (parent);
+
+  // Just queue the metadata buffer, don't block
+  {
+    std::lock_guard<std::mutex> lock(*filter->meta_queue_lock);
+    filter->meta_queue->push (gst_buffer_ref (buf));
+
+    // Keep queue size small (max 5)
+    while (filter->meta_queue->size() > 5) {
+      GstBuffer *old = filter->meta_queue->front();
+      filter->meta_queue->pop();
+      gst_buffer_unref (old);
+    }
+  }
+
+  gst_buffer_unref (buf);
+  return GST_FLOW_OK;
+}
+
+static gboolean
+gst_onnxoverlay_sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
+{
+  Gstonnxoverlay *filter = GST_ONNXOVERLAY (parent);
+
+  switch (GST_EVENT_TYPE (event)) {
+    case GST_EVENT_FLUSH_START:
+      // Clear metadata queue on flush
+      {
+        std::lock_guard<std::mutex> lock(*filter->meta_queue_lock);
+        while (!filter->meta_queue->empty()) {
+          GstBuffer *buf = filter->meta_queue->front();
+          filter->meta_queue->pop();
+          gst_buffer_unref (buf);
+        }
+      }
+      break;
+    default:
+      break;
+  }
+
+  // Forward event from sink to src
+  if (pad == filter->sink_pad) {
+    return gst_pad_push_event (filter->src_pad, event);
+  } else {
+    gst_event_unref (event);
+    return TRUE;
+  }
+}
+
+static gboolean
+gst_onnxoverlay_src_event (GstPad * pad, GstObject * parent, GstEvent * event)
+{
+  Gstonnxoverlay *filter = GST_ONNXOVERLAY (parent);
+
+  // Forward src events to sink
+  return gst_pad_push_event (filter->sink_pad, event);
+}
+
+static gboolean
+onnxoverlay_init (GstPlugin * onnxoverlay)
+{
+  return GST_ELEMENT_REGISTER (onnxoverlay, onnxoverlay);
+}
+
+GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,
+    GST_VERSION_MINOR,
+    onnxoverlay,
+    "Merges custom ONNX metadata with original video (non-blocking)",
+    onnxoverlay_init,
+    PACKAGE_VERSION, GST_LICENSE, GST_PACKAGE_NAME, GST_PACKAGE_ORIGIN)

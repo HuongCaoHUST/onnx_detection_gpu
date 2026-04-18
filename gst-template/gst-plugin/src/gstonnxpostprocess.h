@@ -33,6 +33,8 @@ G_DECLARE_FINAL_TYPE (Gstonnxpostprocess, gst_onnxpostprocess,
 
 struct _Gstonnxpostprocess {
   GstBaseTransform element;
+
+  gboolean draw_results;
 };
 
 G_END_DECLS
