@@ -30,10 +30,7 @@ echo "  Model: /home/huongcao/onnx_detection_gpu/yolo11n.onnx"
 echo "  GStreamer plugins: $GST_PLUGIN_PATH"
 echo "  Display: $DISPLAY"
 echo ""
-echo "Pipeline: Video decode -> tee -> 2 branches:"
-echo "  Branch 1 (Original): video stream to onnxoverlay"
-echo "  Branch 2 (Detection): resize -> inference -> postprocess -> metadata to onnxoverlay"
-echo "  Composer: onnxoverlay (overlay detection results on original video)"
+echo "Pipeline: Video -> resize -> inference -> display (single line)"
 echo ""
 
 # Parse arguments
@@ -43,25 +40,15 @@ DURATION="${2:-}"
 if [ -n "$DURATION" ]; then
     # Run with timeout
     echo "Running for $DURATION seconds..."
-    echo "Pipeline: Video -> tee -> [Branch1: display], [Branch2: inference -> overlay metadata]"
-    echo "If detection is slow, video still plays smoothly (no metadata overlay)"
-    echo ""
     timeout $DURATION /usr/bin/gst-launch-1.0 \
-        filesrc location=/home/huongcao/onnx_detection_gpu/test_video.mp4 ! decodebin ! videoconvert ! videorate ! tee name=t \
-        t. ! queue max-size-buffers=5 ! onnxoverlay name=ov ! videoconvert ! fpsdisplaysink sync=true \
-        t. ! queue max-size-buffers=2 ! videoscale ! video/x-raw,format=RGB,width=640,height=640 ! videorate ! onnxinference model-location=/home/huongcao/onnx_detection_gpu/yolo11n.onnx ! onnxpostprocess draw-results=$DRAW_RESULTS ! ov.sink_meta
+        filesrc location=/home/huongcao/onnx_detection_gpu/test_video.mp4 ! decodebin ! videoconvert ! videorate ! videoscale ! video/x-raw,format=RGB,width=640,height=640 ! queue max-size-buffers=5 ! onnxinference model-location=/home/huongcao/onnx_detection_gpu/yolo11n.onnx ! onnxpostprocess draw-results=$DRAW_RESULTS ! queue max-size-buffers=5 ! videoconvert ! fpsdisplaysink sync=false
 else
     # Run indefinitely
     echo "Running indefinitely (close window to stop)..."
     echo "Usage: $0 [draw_results=true|false] [duration_in_seconds]"
     echo ""
-    echo "Pipeline: Video -> tee -> [Branch1: display], [Branch2: inference -> overlay metadata]"
-    echo "If detection is slow, video still plays smoothly (no metadata overlay)"
-    echo ""
     /usr/bin/gst-launch-1.0 \
-        filesrc location=/home/huongcao/onnx_detection_gpu/test_video.mp4 ! decodebin ! videoconvert ! videorate ! tee name=t \
-        t. ! queue max-size-buffers=5 ! onnxoverlay name=ov ! videoconvert ! fpsdisplaysink sync=true \
-        t. ! queue max-size-buffers=2 ! videoscale ! video/x-raw,format=RGB,width=640,height=640 ! videorate ! onnxinference model-location=/home/huongcao/onnx_detection_gpu/yolo11n.onnx ! onnxpostprocess draw-results=$DRAW_RESULTS ! ov.sink_meta
+        filesrc location=/home/huongcao/onnx_detection_gpu/test_video.mp4 ! decodebin ! videoconvert ! videorate ! videoscale ! video/x-raw,format=RGB,width=640,height=640 ! queue max-size-buffers=5 ! onnxinference model-location=/home/huongcao/onnx_detection_gpu/yolo11n.onnx ! onnxpostprocess draw-results=$DRAW_RESULTS ! queue max-size-buffers=5 ! videoconvert ! fpsdisplaysink sync=false
 fi
 
 
