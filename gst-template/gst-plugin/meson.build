@@ -60,6 +60,15 @@ gstonnxinferenceexample = library('gstonnxinference',
   install_dir : plugins_install_dir,
 )
 
+# Shared metadata library for ONNX plugins
+gstonnxmeta_lib = library('gstonnxmeta-shared',
+  'src/gstonnxmeta.cpp',
+  c_args: plugin_c_args,
+  cpp_args: plugin_c_args,
+  dependencies : [gst_dep],
+  install : false,
+)
+
 # The onnxpostprocess Plugin
 gstonnxpostprocess_sources = [
   'src/gstonnxpostprocess.cpp',
@@ -70,6 +79,7 @@ gstonnxpostprocessexample = library('gstonnxpostprocess',
   c_args: plugin_c_args,
   cpp_args: plugin_c_args,
   dependencies : [gst_dep, gstbase_dep, opencv_dep, onnxruntime_dep],
+  link_with: gstonnxmeta_lib,
   install : true,
   install_dir : plugins_install_dir,
 )
@@ -84,6 +94,7 @@ gstonnxoverlayexample = library('gstonnxoverlay',
   c_args: plugin_c_args,
   cpp_args: plugin_c_args,
   dependencies : [gst_dep, gstbase_dep, opencv_dep],
+  link_with: gstonnxmeta_lib,
   install : true,
   install_dir : plugins_install_dir,
 )

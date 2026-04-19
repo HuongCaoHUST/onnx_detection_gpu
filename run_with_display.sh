@@ -44,18 +44,18 @@ if [ -n "$DURATION" ]; then
     # Run with timeout
     echo "Running for $DURATION seconds..."
     timeout $DURATION /usr/bin/gst-launch-1.0 \
-        filesrc location=/home/huongcao/onnx_detection_gpu/test_video.mp4 ! decodebin ! videoconvert ! videorate ! tee name=t \
-        t. ! queue max-size-buffers=10 ! onnxoverlay name=ov ! videoconvert ! fpsdisplaysink sync=false \
-        t. ! queue max-size-buffers=3 leaky=downstream ! videoscale ! video/x-raw,format=RGB,width=640,height=640 ! videorate ! onnxinference model-location=/home/huongcao/onnx_detection_gpu/yolo11n.onnx ! onnxpostprocess draw-results=false ! ov.sink_meta
+        filesrc location=/home/huongcao/onnx_detection_gpu/test_video.mp4 ! decodebin ! videoconvert ! videorate ! video/x-raw,framerate=25/1 ! tee name=t \
+        t. ! queue max-size-buffers=10 ! onnxoverlay name=ov ! videoconvert ! fpsdisplaysink sync=true \
+        t. ! queue max-size-buffers=3 leaky=downstream ! videoscale ! video/x-raw,format=RGB,width=640,height=640 ! onnxinference model-location=/home/huongcao/onnx_detection_gpu/yolo11n.onnx ! onnxpostprocess draw-results=false ! ov.sink_meta
 else
     # Run indefinitely
     echo "Running indefinitely (close window to stop)..."
     echo "Usage: $0 [draw_results=true|false] [duration_in_seconds]"
     echo ""
     /usr/bin/gst-launch-1.0 \
-        filesrc location=/home/huongcao/onnx_detection_gpu/test_video.mp4 ! decodebin ! videoconvert ! videorate ! tee name=t \
-        t. ! queue max-size-buffers=10 ! onnxoverlay name=ov ! videoconvert ! fpsdisplaysink sync=false \
-        t. ! queue max-size-buffers=3 leaky=downstream ! videoscale ! video/x-raw,format=RGB,width=640,height=640 ! videorate ! onnxinference model-location=/home/huongcao/onnx_detection_gpu/yolo11n.onnx ! onnxpostprocess draw-results=false ! ov.sink_meta
+        filesrc location=/home/huongcao/onnx_detection_gpu/test_video.mp4 ! decodebin ! videoconvert ! videorate ! video/x-raw,framerate=25/1 ! tee name=t \
+        t. ! queue max-size-buffers=10 ! onnxoverlay name=ov ! videoconvert ! fpsdisplaysink sync=true \
+        t. ! queue max-size-buffers=3 leaky=downstream ! videoscale ! video/x-raw,format=RGB,width=640,height=640 ! onnxinference model-location=/home/huongcao/onnx_detection_gpu/yolo11n.onnx ! onnxpostprocess draw-results=false ! ov.sink_meta
 fi
 
 
