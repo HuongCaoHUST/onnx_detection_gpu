@@ -39,8 +39,6 @@ static GstStaticPadTemplate src_template = GST_STATIC_PAD_TEMPLATE ("src",
 
 #define gst_onnxoverlay_parent_class parent_class
 G_DEFINE_TYPE (Gstonnxoverlay, gst_onnxoverlay, GST_TYPE_ELEMENT);
-GST_ELEMENT_REGISTER_DEFINE (onnxoverlay, "onnxoverlay", GST_RANK_NONE,
-    GST_TYPE_ONNXOVERLAY);
 
 // Forward declarations
 static GstFlowReturn gst_onnxoverlay_sink_chain (GstPad * pad, GstObject * parent, GstBuffer * buf);
@@ -244,9 +242,10 @@ gst_onnxoverlay_src_event (GstPad * pad, GstObject * parent, GstEvent * event)
 }
 
 static gboolean
-onnxoverlay_init (GstPlugin * onnxoverlay)
+onnxoverlay_init (GstPlugin * plugin)
 {
-  return GST_ELEMENT_REGISTER (onnxoverlay, onnxoverlay);
+  return gst_element_register (plugin, "onnxoverlay", GST_RANK_NONE,
+      GST_TYPE_ONNXOVERLAY);
 }
 
 GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,

@@ -38,8 +38,6 @@ static GstStaticPadTemplate src_template = GST_STATIC_PAD_TEMPLATE ("src",
 
 #define gst_onnxinference_parent_class parent_class
 G_DEFINE_TYPE (Gstonnxinference, gst_onnxinference, GST_TYPE_BASE_TRANSFORM);
-GST_ELEMENT_REGISTER_DEFINE (onnxinference, "onnxinference", GST_RANK_NONE,
-    GST_TYPE_ONNXINFERENCE);
 
 static void gst_onnxinference_set_property (GObject * object,
     guint prop_id, const GValue * value, GParamSpec * pspec);
@@ -280,9 +278,10 @@ gst_onnxinference_transform (GstBaseTransform * base, GstBuffer * inbuf, GstBuff
 }
 
 static gboolean
-onnxinference_init (GstPlugin * onnxinference)
+onnxinference_init (GstPlugin * plugin)
 {
-  return GST_ELEMENT_REGISTER (onnxinference, onnxinference);
+  return gst_element_register (plugin, "onnxinference", GST_RANK_NONE,
+      GST_TYPE_ONNXINFERENCE);
 }
 
 GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,

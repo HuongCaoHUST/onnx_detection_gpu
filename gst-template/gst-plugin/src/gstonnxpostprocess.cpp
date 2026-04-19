@@ -16,6 +16,8 @@ enum
 {
   PROP_0,
   PROP_DRAW_RESULTS,
+  PROP_ORIGINAL_WIDTH,
+  PROP_ORIGINAL_HEIGHT,
 };
 
 GST_DEBUG_CATEGORY_STATIC (gst_onnxpostprocess_debug);
@@ -35,8 +37,6 @@ static GstStaticPadTemplate src_template = GST_STATIC_PAD_TEMPLATE ("src",
 
 #define gst_onnxpostprocess_parent_class parent_class
 G_DEFINE_TYPE (Gstonnxpostprocess, gst_onnxpostprocess, GST_TYPE_BASE_TRANSFORM);
-GST_ELEMENT_REGISTER_DEFINE (onnxpostprocess, "onnxpostprocess", GST_RANK_NONE,
-    GST_TYPE_ONNXPOSTPROCESS);
 
 static GstFlowReturn gst_onnxpostprocess_transform (GstBaseTransform * base, GstBuffer * inbuf, GstBuffer * outbuf);
 static gboolean gst_onnxpostprocess_transform_size (GstBaseTransform * base, GstPadDirection direction, GstCaps * caps, gsize size, GstCaps * othercaps, gsize * othersize);
@@ -58,6 +58,16 @@ gst_onnxpostprocess_class_init (GstonnxpostprocessClass * klass)
           "Whether to draw the detection results on the frame", TRUE,
           (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
+  g_object_class_install_property (gobject_class, PROP_ORIGINAL_WIDTH,
+      g_param_spec_int ("original-width", "Original Width",
+          "Original video width before resize to 640x640", 0, G_MAXINT, 0,
+          (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_ORIGINAL_HEIGHT,
+      g_param_spec_int ("original-height", "Original Height",
+          "Original video height before resize to 640x640", 0, G_MAXINT, 0,
+          (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
   gst_element_class_set_details_simple (gstelement_class,
       "ONNX Postprocess", "Filter/Video",
       "Performs bounding box drawing based on YOLO output tensor", "HuongCao <<user@hostname.org>>");
@@ -77,6 +87,8 @@ static void
 gst_onnxpostprocess_init (Gstonnxpostprocess * filter)
 {
   filter->draw_results = TRUE;
+  filter->original_width = 640;  /* Default to 640x640 (no scaling) */
+  filter->original_height = 640;
 }
 
 static gboolean
@@ -97,6 +109,12 @@ gst_onnxpostprocess_set_property (GObject * object, guint prop_id,
     case PROP_DRAW_RESULTS:
       filter->draw_results = g_value_get_boolean (value);
       break;
+    case PROP_ORIGINAL_WIDTH:
+      filter->original_width = g_value_get_int (value);
+      break;
+    case PROP_ORIGINAL_HEIGHT:
+      filter->original_height = g_value_get_int (value);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -112,6 +130,12 @@ gst_onnxpostprocess_get_property (GObject * object, guint prop_id,
   switch (prop_id) {
     case PROP_DRAW_RESULTS:
       g_value_set_boolean (value, filter->draw_results);
+      break;
+    case PROP_ORIGINAL_WIDTH:
+      g_value_set_int (value, filter->original_width);
+      break;
+    case PROP_ORIGINAL_HEIGHT:
+      g_value_set_int (value, filter->original_height);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -223,20 +247,30 @@ gst_onnxpostprocess_transform (GstBaseTransform * base, GstBuffer * inbuf, GstBu
 
   GST_INFO_OBJECT (base, "Detected %zu objects", indices.size());
 
+  /* Calculate scaling factors for coordinate conversion */
+  float scale_x = (float)GST_ONNXPOSTPROCESS (base)->original_width / 640.0f;
+  float scale_y = (float)GST_ONNXPOSTPROCESS (base)->original_height / 640.0f;
+
   for (int idx : indices) {
       cv::Rect box = boxes[idx];
       int class_id = class_ids[idx];
       float conf = confidences[idx];
 
-      // Attach custom metadata to the output buffer
-      gst_buffer_add_onnx_meta (outbuf, box.x, box.y, box.width, box.height, 
+      /* Scale coordinates to original video size */
+      int scaled_x = (int)(box.x * scale_x);
+      int scaled_y = (int)(box.y * scale_y);
+      int scaled_w = (int)(box.width * scale_x);
+      int scaled_h = (int)(box.height * scale_y);
+
+      /* Attach custom metadata to the output buffer */
+      gst_buffer_add_onnx_meta (outbuf, scaled_x, scaled_y, scaled_w, scaled_h,
           CLASS_NAMES[class_id].c_str());
 
       if (GST_ONNXPOSTPROCESS (base)->draw_results) {
           cv::Mat frame(INPUT_HEIGHT, INPUT_WIDTH, CV_8UC3, img_out_map.data);
           cv::rectangle(frame, box, cv::Scalar(0, 255, 0), 2);
           std::string label = CLASS_NAMES[class_id] + " " + cv::format("%.2f", conf);
-          
+
           int baseLine;
           cv::Size labelSize = cv::getTextSize(label, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);
           cv::rectangle(frame, cv::Point(box.x, box.y - labelSize.height),
@@ -253,9 +287,10 @@ gst_onnxpostprocess_transform (GstBaseTransform * base, GstBuffer * inbuf, GstBu
 }
 
 static gboolean
-onnxpostprocess_init (GstPlugin * onnxpostprocess)
+onnxpostprocess_init (GstPlugin * plugin)
 {
-  return GST_ELEMENT_REGISTER (onnxpostprocess, onnxpostprocess);
+  return gst_element_register (plugin, "onnxpostprocess", GST_RANK_NONE,
+      GST_TYPE_ONNXPOSTPROCESS);
 }
 
 GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,

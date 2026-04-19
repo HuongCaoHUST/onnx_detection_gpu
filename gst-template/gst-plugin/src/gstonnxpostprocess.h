@@ -35,6 +35,10 @@ struct _Gstonnxpostprocess {
   GstBaseTransform element;
 
   gboolean draw_results;
+
+  /* Track original video dimensions for coordinate scaling */
+  gint original_width;
+  gint original_height;
 };
 
 G_END_DECLS
