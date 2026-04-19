@@ -2,3 +2,5 @@
 gst-plugin-mlpostprocess
 gst-plugin-overlay
 gst-plugin-vcomposer
+output
+*.mkv
