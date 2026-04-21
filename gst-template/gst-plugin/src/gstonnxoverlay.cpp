@@ -86,6 +86,7 @@ gst_onnxoverlay_init (Gstonnxoverlay * filter)
   filter->meta_queue_lock = new std::mutex();
   filter->meta_thread = NULL;
   filter->stop_thread = FALSE;
+  filter->last_meta_buf = NULL;  // cache bbox của frame inference trước
 }
 
 static GstPad *
@@ -118,6 +119,15 @@ gst_onnxoverlay_sink_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
     if (!filter->meta_queue->empty()) {
       meta_buf = filter->meta_queue->front();
       filter->meta_queue->pop();
+
+      // Cập nhật cache: giải phóng buffer cũ, giữ lại buffer mới
+      if (filter->last_meta_buf)
+        gst_buffer_unref (filter->last_meta_buf);
+      filter->last_meta_buf = gst_buffer_ref (meta_buf);
+    } else if (filter->last_meta_buf) {
+      // Không có kết quả mới → dùng lại bbox của lần inference trước
+      meta_buf = gst_buffer_ref (filter->last_meta_buf);
+      GST_DEBUG_OBJECT (filter, "No new metadata, reusing cached bounding boxes");
     }
   }
 
@@ -216,6 +226,11 @@ gst_onnxoverlay_sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
           GstBuffer *buf = filter->meta_queue->front();
           filter->meta_queue->pop();
           gst_buffer_unref (buf);
+        }
+        // Xóa cả cache khi flush (ví dụ: seek, restart)
+        if (filter->last_meta_buf) {
+          gst_buffer_unref (filter->last_meta_buf);
+          filter->last_meta_buf = NULL;
         }
       }
       break;

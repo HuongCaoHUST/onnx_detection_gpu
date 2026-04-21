@@ -29,6 +29,10 @@ struct _Gstonnxoverlay {
   std::mutex *meta_queue_lock;
   GThread *meta_thread;
   gboolean stop_thread;
+
+  // Cache: giữ lại metadata của lần inference gần nhất
+  // để dùng lại khi inference chưa có kết quả mới (tránh bbox nhấp nháy)
+  GstBuffer *last_meta_buf;
 };
 
 G_END_DECLS
