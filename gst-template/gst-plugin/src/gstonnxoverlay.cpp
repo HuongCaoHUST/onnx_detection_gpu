@@ -56,6 +56,25 @@ static GstPad * gst_onnxoverlay_request_new_pad (GstElement * element,
     GstPadTemplate * templ, const gchar * name, const GstCaps * caps);
 static void gst_onnxoverlay_set_property (GObject * object, guint prop_id, const GValue * value, GParamSpec * pspec);
 static void gst_onnxoverlay_get_property (GObject * object, guint prop_id, GValue * value, GParamSpec * pspec);
+static void gst_onnxoverlay_finalize (GObject * object);
+
+GType
+gst_onnxoverlay_mc_method_get_type (void)
+{
+  static GType type = 0;
+  if (!type) {
+    static const GEnumValue values[] = {
+      { GST_ONNXOVERLAY_MC_NONE, "None (disabled)", "none" },
+      { GST_ONNXOVERLAY_MC_NONE, "None (false)", "false" },
+      { GST_ONNXOVERLAY_MC_FORWARD, "Forward-fill", "forward" },
+      { GST_ONNXOVERLAY_MC_FORWARD, "Forward-fill (true)", "true" },
+      { GST_ONNXOVERLAY_MC_LINEAR, "Linear Interpolation", "linear" },
+      { 0, NULL, NULL }
+    };
+    type = g_enum_register_static ("GstOnnxOverlayMCMethod", values);
+  }
+  return type;
+}
 
 static void
 gst_onnxoverlay_class_init (GstonnxoverlayClass * klass)
@@ -73,10 +92,13 @@ gst_onnxoverlay_class_init (GstonnxoverlayClass * klass)
   GObjectClass *gobject_class = (GObjectClass *) klass;
   gobject_class->set_property = gst_onnxoverlay_set_property;
   gobject_class->get_property = gst_onnxoverlay_get_property;
+  gobject_class->finalize = gst_onnxoverlay_finalize;
 
   g_object_class_install_property (gobject_class, PROP_USE_MOTION_COMPENSATION,
-      g_param_spec_boolean ("motion-compensation", "Motion Compensation",
-          "Use cached bounding boxes when new metadata is not available", TRUE,
+      g_param_spec_enum ("motion-compensation", "Motion Compensation Method",
+          "Select the motion compensation method for intermediate frames",
+          GST_TYPE_ONNXOVERLAY_MC_METHOD,
+          GST_ONNXOVERLAY_MC_FORWARD,
           (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
   gstelement_class->request_new_pad = gst_onnxoverlay_request_new_pad;
@@ -104,8 +126,22 @@ gst_onnxoverlay_init (Gstonnxoverlay * filter)
   filter->meta_queue_lock = new std::mutex();
   filter->meta_thread = NULL;
   filter->stop_thread = FALSE;
-  filter->last_meta_buf = NULL;  // cache bbox của frame inference trước
-  filter->use_motion_compensation = TRUE;
+  filter->last_meta_buf = NULL;
+  filter->mc_method = GST_ONNXOVERLAY_MC_FORWARD;
+  filter->track_states = new std::map<int, TrackVelocityState>();
+}
+
+static void
+gst_onnxoverlay_finalize (GObject * object)
+{
+  Gstonnxoverlay *filter = GST_ONNXOVERLAY (object);
+  delete filter->meta_queue;
+  delete filter->meta_queue_lock;
+  delete filter->track_states;
+  if (filter->last_meta_buf) {
+    gst_buffer_unref (filter->last_meta_buf);
+  }
+  G_OBJECT_CLASS (gst_onnxoverlay_parent_class)->finalize (object);
 }
 
 static GstPad *
@@ -134,7 +170,7 @@ gst_onnxoverlay_set_property (GObject * object, guint prop_id,
 
   switch (prop_id) {
     case PROP_USE_MOTION_COMPENSATION:
-      filter->use_motion_compensation = g_value_get_boolean (value);
+      filter->mc_method = (GstOnnxOverlayMCMethod) g_value_get_enum (value);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -150,7 +186,7 @@ gst_onnxoverlay_get_property (GObject * object, guint prop_id,
 
   switch (prop_id) {
     case PROP_USE_MOTION_COMPENSATION:
-      g_value_set_boolean (value, filter->use_motion_compensation);
+      g_value_set_enum (value, filter->mc_method);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -164,6 +200,8 @@ gst_onnxoverlay_sink_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
   Gstonnxoverlay *filter = GST_ONNXOVERLAY (parent);
   GstBuffer *meta_buf = NULL;
 
+  bool is_new_meta = false;
+
   // Check if there's a metadata buffer in queue (non-blocking)
   {
     std::lock_guard<std::mutex> lock(*filter->meta_queue_lock);
@@ -171,12 +209,12 @@ gst_onnxoverlay_sink_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
       meta_buf = filter->meta_queue->front();
       filter->meta_queue->pop();
 
-      // Cập nhật cache: giải phóng buffer cũ, giữ lại buffer mới
       if (filter->last_meta_buf)
         gst_buffer_unref (filter->last_meta_buf);
       filter->last_meta_buf = gst_buffer_ref (meta_buf);
-    } else if (filter->use_motion_compensation && filter->last_meta_buf) {
-      // Không có kết quả mới → dùng lại bbox của lần inference trước (nếu bật bù chuyển động)
+      
+      is_new_meta = true;
+    } else if (filter->mc_method != GST_ONNXOVERLAY_MC_NONE && filter->last_meta_buf) {
       meta_buf = gst_buffer_ref (filter->last_meta_buf);
       GST_DEBUG_OBJECT (filter, "No new metadata, reusing cached bounding boxes");
     }
@@ -213,10 +251,44 @@ gst_onnxoverlay_sink_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
             if (meta->info->api == GST_ONNX_META_API_TYPE) {
               GstOnnxMeta *ometa = (GstOnnxMeta *) meta;
 
-              int x = (int)(ometa->x * scale_x);
-              int y = (int)(ometa->y * scale_y);
-              int w = (int)(ometa->w * scale_x);
-              int h = (int)(ometa->h * scale_y);
+              float raw_x = ometa->x;
+              float raw_y = ometa->y;
+              float raw_w = ometa->w;
+              float raw_h = ometa->h;
+              int track_id = ometa->track_id;
+
+              if (track_id >= 0) {
+                if (is_new_meta) {
+                  if (filter->track_states->count(track_id)) {
+                    auto& ts = (*filter->track_states)[track_id];
+                    int dt = ts.frames_since_update + 1;
+                    ts.dx = (raw_x - ts.last_x) / dt;
+                    ts.dy = (raw_y - ts.last_y) / dt;
+                    ts.dw = (raw_w - ts.last_w) / dt;
+                    ts.dh = (raw_h - ts.last_h) / dt;
+                  } else {
+                    (*filter->track_states)[track_id] = {0};
+                  }
+                  auto& ts = (*filter->track_states)[track_id];
+                  ts.last_x = raw_x;
+                  ts.last_y = raw_y;
+                  ts.last_w = raw_w;
+                  ts.last_h = raw_h;
+                  ts.frames_since_update = 0;
+                } else if (filter->mc_method == GST_ONNXOVERLAY_MC_LINEAR && filter->track_states->count(track_id)) {
+                  auto& ts = (*filter->track_states)[track_id];
+                  ts.frames_since_update++;
+                  raw_x = ts.last_x + ts.dx * ts.frames_since_update;
+                  raw_y = ts.last_y + ts.dy * ts.frames_since_update;
+                  raw_w = ts.last_w + ts.dw * ts.frames_since_update;
+                  raw_h = ts.last_h + ts.dh * ts.frames_since_update;
+                }
+              }
+
+              int x = (int)(raw_x * scale_x);
+              int y = (int)(raw_y * scale_y);
+              int w = (int)(raw_w * scale_x);
+              int h = (int)(raw_h * scale_y);
 
               cv::rectangle(img, cv::Rect(x, y, w, h), cv::Scalar(0, 255, 0), 2);
               if (ometa->label) {

@@ -45,7 +45,7 @@ if [ -n "$DURATION" ]; then
     echo "Running for $DURATION seconds..."
     timeout $DURATION /usr/bin/gst-launch-1.0 \
         filesrc location=/home/huongcao/onnx_detection_gpu/test_video.mp4 ! decodebin ! videoconvert ! videorate ! video/x-raw,framerate=25/1 ! tee name=t \
-        t. ! queue max-size-buffers=5 ! onnxoverlay name=ov motion-compensation=true ! videoconvert ! fpsdisplaysink sync=true \
+        t. ! queue max-size-buffers=5 ! onnxoverlay name=ov motion-compensation=linear ! videoconvert ! fpsdisplaysink sync=true \
         t. ! queue max-size-buffers=3 leaky=downstream ! videoscale ! video/x-raw,format=RGB,width=640,height=640 ! onnxinference model-location=/home/huongcao/onnx_detection_gpu/yolo11n.onnx ! onnxpostprocess draw-results=false ! onnxtracker ! ov.sink_meta
 else
     # Run indefinitely
@@ -54,7 +54,7 @@ else
     echo ""
     /usr/bin/gst-launch-1.0 \
         filesrc location=/home/huongcao/onnx_detection_gpu/test_video.mp4 ! decodebin ! videoconvert ! videorate ! video/x-raw,framerate=25/1 ! tee name=t \
-        t. ! queue max-size-buffers=8 ! onnxoverlay name=ov motion-compensation=true ! videoconvert ! fpsdisplaysink sync=true \
+        t. ! queue max-size-buffers=8 ! onnxoverlay name=ov motion-compensation=linear ! videoconvert ! fpsdisplaysink sync=true \
         t. ! queue max-size-buffers=3 leaky=downstream ! videoscale ! video/x-raw,format=RGB,width=640,height=640 ! onnxinference model-location=/home/huongcao/onnx_detection_gpu/yolo11n.onnx ! onnxpostprocess draw-results=false ! onnxtracker ! ov.sink_meta
 fi
 
