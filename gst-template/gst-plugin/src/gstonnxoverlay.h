@@ -33,6 +33,7 @@ struct _Gstonnxoverlay {
   // Cache: giữ lại metadata của lần inference gần nhất
   // để dùng lại khi inference chưa có kết quả mới (tránh bbox nhấp nháy)
   GstBuffer *last_meta_buf;
+  gboolean use_motion_compensation;
 };
 
 G_END_DECLS

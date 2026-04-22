@@ -17,6 +17,13 @@
 
 GST_DEBUG_CATEGORY_STATIC (gst_onnxoverlay_debug);
 #define GST_CAT_DEFAULT gst_onnxoverlay_debug
+ 
+enum
+{
+  PROP_0,
+  PROP_USE_MOTION_COMPENSATION,
+};
+
 
 // Pad templates
 static GstStaticPadTemplate sink_template = GST_STATIC_PAD_TEMPLATE ("sink",
@@ -47,6 +54,8 @@ static gboolean gst_onnxoverlay_sink_event (GstPad * pad, GstObject * parent, Gs
 static gboolean gst_onnxoverlay_src_event (GstPad * pad, GstObject * parent, GstEvent * event);
 static GstPad * gst_onnxoverlay_request_new_pad (GstElement * element,
     GstPadTemplate * templ, const gchar * name, const GstCaps * caps);
+static void gst_onnxoverlay_set_property (GObject * object, guint prop_id, const GValue * value, GParamSpec * pspec);
+static void gst_onnxoverlay_get_property (GObject * object, guint prop_id, GValue * value, GParamSpec * pspec);
 
 static void
 gst_onnxoverlay_class_init (GstonnxoverlayClass * klass)
@@ -60,6 +69,15 @@ gst_onnxoverlay_class_init (GstonnxoverlayClass * klass)
   gst_element_class_set_details_simple (gstelement_class,
       "ONNX Overlay", "Filter/Editor/Video",
       "Overlays detection metadata on video (non-blocking)", "HuongCao <<user@hostname.org>>");
+
+  GObjectClass *gobject_class = (GObjectClass *) klass;
+  gobject_class->set_property = gst_onnxoverlay_set_property;
+  gobject_class->get_property = gst_onnxoverlay_get_property;
+
+  g_object_class_install_property (gobject_class, PROP_USE_MOTION_COMPENSATION,
+      g_param_spec_boolean ("motion-compensation", "Motion Compensation",
+          "Use cached bounding boxes when new metadata is not available", TRUE,
+          (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
   gstelement_class->request_new_pad = gst_onnxoverlay_request_new_pad;
 
@@ -87,6 +105,7 @@ gst_onnxoverlay_init (Gstonnxoverlay * filter)
   filter->meta_thread = NULL;
   filter->stop_thread = FALSE;
   filter->last_meta_buf = NULL;  // cache bbox của frame inference trước
+  filter->use_motion_compensation = TRUE;
 }
 
 static GstPad *
@@ -107,6 +126,38 @@ gst_onnxoverlay_request_new_pad (GstElement * element,
   return NULL;
 }
 
+static void
+gst_onnxoverlay_set_property (GObject * object, guint prop_id,
+    const GValue * value, GParamSpec * pspec)
+{
+  Gstonnxoverlay *filter = GST_ONNXOVERLAY (object);
+
+  switch (prop_id) {
+    case PROP_USE_MOTION_COMPENSATION:
+      filter->use_motion_compensation = g_value_get_boolean (value);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+      break;
+  }
+}
+
+static void
+gst_onnxoverlay_get_property (GObject * object, guint prop_id,
+    GValue * value, GParamSpec * pspec)
+{
+  Gstonnxoverlay *filter = GST_ONNXOVERLAY (object);
+
+  switch (prop_id) {
+    case PROP_USE_MOTION_COMPENSATION:
+      g_value_set_boolean (value, filter->use_motion_compensation);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+      break;
+  }
+}
+
 static GstFlowReturn
 gst_onnxoverlay_sink_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
 {
@@ -124,8 +175,8 @@ gst_onnxoverlay_sink_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
       if (filter->last_meta_buf)
         gst_buffer_unref (filter->last_meta_buf);
       filter->last_meta_buf = gst_buffer_ref (meta_buf);
-    } else if (filter->last_meta_buf) {
-      // Không có kết quả mới → dùng lại bbox của lần inference trước
+    } else if (filter->use_motion_compensation && filter->last_meta_buf) {
+      // Không có kết quả mới → dùng lại bbox của lần inference trước (nếu bật bù chuyển động)
       meta_buf = gst_buffer_ref (filter->last_meta_buf);
       GST_DEBUG_OBJECT (filter, "No new metadata, reusing cached bounding boxes");
     }
