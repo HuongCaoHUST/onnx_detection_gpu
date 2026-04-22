@@ -220,7 +220,12 @@ gst_onnxoverlay_sink_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
 
               cv::rectangle(img, cv::Rect(x, y, w, h), cv::Scalar(0, 255, 0), 2);
               if (ometa->label) {
-                cv::putText(img, ometa->label, cv::Point(x, y - 5),
+                std::string display_label = ometa->label;
+                GST_DEBUG_OBJECT (filter, "Drawing label %s with track_id %d", ometa->label, ometa->track_id);
+                if (ometa->track_id >= 0) {
+                  display_label += " #" + std::to_string(ometa->track_id);
+                }
+                cv::putText(img, display_label, cv::Point(x, y - 5),
                     cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 1);
               }
             }

@@ -98,3 +98,18 @@ gstonnxoverlayexample = library('gstonnxoverlay',
   install : true,
   install_dir : plugins_install_dir,
 )
+
+# The onnxtracker Plugin
+gstonnxtracker_sources = [
+  'src/gstonnxtracker.cpp',
+]
+
+gstonnxtrackerexample = library('gstonnxtracker',
+  gstonnxtracker_sources,
+  c_args: plugin_c_args,
+  cpp_args: plugin_c_args,
+  dependencies : [gst_dep, gstbase_dep, opencv_dep],
+  link_with: gstonnxmeta_lib,
+  install : true,
+  install_dir : plugins_install_dir,
+)

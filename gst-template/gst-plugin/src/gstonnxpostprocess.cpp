@@ -263,7 +263,7 @@ gst_onnxpostprocess_transform (GstBaseTransform * base, GstBuffer * inbuf, GstBu
       int scaled_h = (int)(box.height * scale_y);
 
       /* Attach custom metadata to the output buffer */
-      gst_buffer_add_onnx_meta (outbuf, scaled_x, scaled_y, scaled_w, scaled_h,
+      gst_buffer_add_onnx_meta (outbuf, -1, scaled_x, scaled_y, scaled_w, scaled_h,
           CLASS_NAMES[class_id].c_str());
 
       if (GST_ONNXPOSTPROCESS (base)->draw_results) {

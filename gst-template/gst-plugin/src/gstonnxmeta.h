@@ -15,6 +15,7 @@ typedef struct _GstOnnxMeta GstOnnxMeta;
 struct _GstOnnxMeta {
   GstMeta meta;
 
+  gint track_id;
   gint x, y, w, h;
   gchar *label;
 };
@@ -28,7 +29,7 @@ const GstMetaInfo * gst_onnx_meta_get_info (void);
 #define gst_buffer_get_onnx_meta(b) \
   ((GstOnnxMeta*)gst_buffer_get_meta((b),GST_ONNX_META_API_TYPE))
 
-GstOnnxMeta * gst_buffer_add_onnx_meta (GstBuffer * buffer, gint x, gint y, gint w, gint h, const gchar * label);
+GstOnnxMeta * gst_buffer_add_onnx_meta (GstBuffer * buffer, gint track_id, gint x, gint y, gint w, gint h, const gchar * label);
 
 G_END_DECLS
 

@@ -10,6 +10,7 @@ static gboolean
 gst_onnx_meta_init (GstMeta * meta, gpointer params, GstBuffer * buffer)
 {
   GstOnnxMeta *emeta = (GstOnnxMeta *) meta;
+  emeta->track_id = -1;
   emeta->x = emeta->y = emeta->w = emeta->h = 0;
   emeta->label = NULL;
   return TRUE;
@@ -27,7 +28,7 @@ gst_onnx_meta_transform (GstBuffer * transbuf, GstMeta * meta,
     GstBuffer * buffer, GQuark type, gpointer data)
 {
   GstOnnxMeta *emeta = (GstOnnxMeta *) meta;
-  gst_buffer_add_onnx_meta (transbuf, emeta->x, emeta->y, emeta->w, emeta->h, emeta->label);
+  gst_buffer_add_onnx_meta (transbuf, emeta->track_id, emeta->x, emeta->y, emeta->w, emeta->h, emeta->label);
   return TRUE;
 }
 
@@ -61,11 +62,12 @@ gst_onnx_meta_get_info (void)
 }
 
 GstOnnxMeta *
-gst_buffer_add_onnx_meta (GstBuffer * buffer, gint x, gint y, gint w, gint h, const gchar * label)
+gst_buffer_add_onnx_meta (GstBuffer * buffer, gint track_id, gint x, gint y, gint w, gint h, const gchar * label)
 {
   GstOnnxMeta *meta;
 
   meta = (GstOnnxMeta *) gst_buffer_add_meta (buffer, GST_ONNX_META_INFO, NULL);
+  meta->track_id = track_id;
   meta->x = x;
   meta->y = y;
   meta->w = w;
