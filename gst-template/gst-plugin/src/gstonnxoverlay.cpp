@@ -258,30 +258,68 @@ gst_onnxoverlay_sink_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
               int track_id = ometa->track_id;
 
               if (track_id >= 0) {
+                GstClockTime buf_pts = GST_BUFFER_PTS(buf);
+                GstClockTime meta_pts = ometa->pts;
+
                 if (is_new_meta) {
                   if (filter->track_states->count(track_id)) {
                     auto& ts = (*filter->track_states)[track_id];
-                    int dt = ts.frames_since_update + 1;
-                    ts.dx = (raw_x - ts.last_x) / dt;
-                    ts.dy = (raw_y - ts.last_y) / dt;
-                    ts.dw = (raw_w - ts.last_w) / dt;
-                    ts.dh = (raw_h - ts.last_h) / dt;
+                    if (GST_CLOCK_TIME_IS_VALID(meta_pts) && GST_CLOCK_TIME_IS_VALID(ts.last_pts) && meta_pts > ts.last_pts) {
+                        double dt_ns = (double)(meta_pts - ts.last_pts);
+                        ts.dx = (raw_x - ts.last_x) / dt_ns;
+                        ts.dy = (raw_y - ts.last_y) / dt_ns;
+                        ts.dw = (raw_w - ts.last_w) / dt_ns;
+                        ts.dh = (raw_h - ts.last_h) / dt_ns;
+                    }
                   } else {
-                    (*filter->track_states)[track_id] = {0};
+                    (*filter->track_states)[track_id] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, GST_CLOCK_TIME_NONE};
                   }
                   auto& ts = (*filter->track_states)[track_id];
+                  // Lưu điểm cũ để clamp
+                  ts.prev_x = ts.last_x;
+                  ts.prev_y = ts.last_y;
+                  ts.prev_w = ts.last_w;
+                  ts.prev_h = ts.last_h;
+                  
                   ts.last_x = raw_x;
                   ts.last_y = raw_y;
                   ts.last_w = raw_w;
                   ts.last_h = raw_h;
-                  ts.frames_since_update = 0;
-                } else if (filter->mc_method == GST_ONNXOVERLAY_MC_LINEAR && filter->track_states->count(track_id)) {
+                  ts.last_pts = meta_pts;
+                }
+                
+                if (filter->mc_method == GST_ONNXOVERLAY_MC_LINEAR && filter->track_states->count(track_id)) {
                   auto& ts = (*filter->track_states)[track_id];
-                  ts.frames_since_update++;
-                  raw_x = ts.last_x + ts.dx * ts.frames_since_update;
-                  raw_y = ts.last_y + ts.dy * ts.frames_since_update;
-                  raw_w = ts.last_w + ts.dw * ts.frames_since_update;
-                  raw_h = ts.last_h + ts.dh * ts.frames_since_update;
+                  if (GST_CLOCK_TIME_IS_VALID(buf_pts) && GST_CLOCK_TIME_IS_VALID(ts.last_pts)) {
+                      double time_diff = (double)buf_pts - (double)ts.last_pts;
+                      // Không giới hạn >0 để nội suy lùi được về quá khứ (nếu meta nằm ở tương lai so với màn hình)
+                      raw_x = ts.last_x + ts.dx * time_diff;
+                      raw_y = ts.last_y + ts.dy * time_diff;
+                      raw_w = ts.last_w + ts.dw * time_diff;
+                      raw_h = ts.last_h + ts.dh * time_diff;
+                      
+                      // Xác nhận 100% kẹp chặt tọa độ giữa 2 box cũ và mới
+                      if (ts.prev_x != 0 || ts.prev_y != 0) {
+                          float min_x = std::min(ts.prev_x, ts.last_x);
+                          float max_x = std::max(ts.prev_x, ts.last_x);
+                          float min_y = std::min(ts.prev_y, ts.last_y);
+                          float max_y = std::max(ts.prev_y, ts.last_y);
+                          
+                          raw_x = std::min(std::max((float)raw_x, min_x), max_x);
+                          raw_y = std::min(std::max((float)raw_y, min_y), max_y);
+                      }
+                  } else {
+                      raw_x = ts.last_x;
+                      raw_y = ts.last_y;
+                      raw_w = ts.last_w;
+                      raw_h = ts.last_h;
+                  }
+                } else if (filter->mc_method != GST_ONNXOVERLAY_MC_NONE && filter->track_states->count(track_id)) {
+                  auto& ts = (*filter->track_states)[track_id];
+                  raw_x = ts.last_x;
+                  raw_y = ts.last_y;
+                  raw_w = ts.last_w;
+                  raw_h = ts.last_h;
                 }
               }
 

@@ -25,8 +25,9 @@ GType gst_onnxoverlay_mc_method_get_type (void);
 
 struct TrackVelocityState {
     float last_x, last_y, last_w, last_h;
+    float prev_x, prev_y, prev_w, prev_h;
     float dx, dy, dw, dh;
-    int frames_since_update;
+    GstClockTime last_pts;
 };
 
 
