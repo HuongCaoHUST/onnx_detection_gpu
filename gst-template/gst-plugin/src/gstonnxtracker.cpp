@@ -27,8 +27,32 @@ static GstStaticPadTemplate src_template = GST_STATIC_PAD_TEMPLATE ("src",
 #define gst_onnxtracker_parent_class parent_class
 G_DEFINE_TYPE (Gstonnxtracker, gst_onnxtracker, GST_TYPE_BASE_TRANSFORM);
 
+GType
+gst_onnxtracker_algorithm_get_type (void)
+{
+  static GType type = 0;
+  if (!type) {
+    static const GEnumValue values[] = {
+      {GST_ONNX_TRACKER_ALGO_IOU, "IoU Tracker (No Kalman Filter)", "iou"},
+      {GST_ONNX_TRACKER_ALGO_SORT, "SORT Tracker (Kalman Filter + IoU)", "sort"},
+      {0, NULL, NULL}
+    };
+    type = g_enum_register_static ("GstOnnxTrackerAlgorithm", values);
+  }
+  return type;
+}
+
+enum
+{
+  PROP_0,
+  PROP_TRACKER_ALGORITHM,
+};
+#define DEFAULT_TRACKER_ALGORITHM GST_ONNX_TRACKER_ALGO_SORT
+
 static GstFlowReturn gst_onnxtracker_transform_ip (GstBaseTransform * base, GstBuffer * buf);
 static void gst_onnxtracker_finalize (GObject * object);
+static void gst_onnxtracker_set_property (GObject * object, guint prop_id, const GValue * value, GParamSpec * pspec);
+static void gst_onnxtracker_get_property (GObject * object, guint prop_id, GValue * value, GParamSpec * pspec);
 
 static void
 gst_onnxtracker_class_init (GstonnxtrackerClass * klass)
@@ -38,6 +62,14 @@ gst_onnxtracker_class_init (GstonnxtrackerClass * klass)
   GstBaseTransformClass *basetransform_class = (GstBaseTransformClass *) klass;
 
   gobject_class->finalize = gst_onnxtracker_finalize;
+  gobject_class->set_property = gst_onnxtracker_set_property;
+  gobject_class->get_property = gst_onnxtracker_get_property;
+
+  g_object_class_install_property (gobject_class, PROP_TRACKER_ALGORITHM,
+      g_param_spec_enum ("tracker-algorithm", "Tracker Algorithm",
+          "Algorithm to use for tracking",
+          GST_TYPE_ONNX_TRACKER_ALGORITHM, DEFAULT_TRACKER_ALGORITHM,
+          (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
   gst_element_class_set_details_simple (gstelement_class,
       "ONNX Tracker", "Filter/Video",
@@ -58,8 +90,39 @@ gst_onnxtracker_init (Gstonnxtracker * filter)
 {
   filter->next_track_id = 0;
   filter->active_tracks = new std::map<int, Track>();
+  filter->tracker_algorithm = DEFAULT_TRACKER_ALGORITHM;
   // Make sure it runs in place
   gst_base_transform_set_in_place (GST_BASE_TRANSFORM (filter), TRUE);
+}
+
+static void
+gst_onnxtracker_set_property (GObject * object, guint prop_id, const GValue * value, GParamSpec * pspec)
+{
+  Gstonnxtracker *filter = GST_ONNXTRACKER (object);
+
+  switch (prop_id) {
+    case PROP_TRACKER_ALGORITHM:
+      filter->tracker_algorithm = (GstOnnxTrackerAlgorithm) g_value_get_enum (value);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+      break;
+  }
+}
+
+static void
+gst_onnxtracker_get_property (GObject * object, guint prop_id, GValue * value, GParamSpec * pspec)
+{
+  Gstonnxtracker *filter = GST_ONNXTRACKER (object);
+
+  switch (prop_id) {
+    case PROP_TRACKER_ALGORITHM:
+      g_value_set_enum (value, filter->tracker_algorithm);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+      break;
+  }
 }
 
 static void
@@ -122,17 +185,21 @@ gst_onnxtracker_transform_ip (GstBaseTransform * base, GstBuffer * buf)
   // 2. Predict step for all active tracks
   for (auto& pair : *filter->active_tracks) {
     Track& t = pair.second;
-    cv::Mat prediction = t.kf.predict();
-    float cx = prediction.at<float>(0);
-    float cy = prediction.at<float>(1);
-    
-    // We assume w, h don't change drastically for IoU matching (could add w,h to state, but simplify for now)
-    t.predicted_box = cv::Rect(
-        static_cast<int>(cx - t.predicted_box.width / 2.0f),
-        static_cast<int>(cy - t.predicted_box.height / 2.0f),
-        t.predicted_box.width, 
-        t.predicted_box.height
-    );
+    if (filter->tracker_algorithm == GST_ONNX_TRACKER_ALGO_SORT) {
+      cv::Mat prediction = t.kf.predict();
+      float cx = prediction.at<float>(0);
+      float cy = prediction.at<float>(1);
+      
+      // We assume w, h don't change drastically for IoU matching
+      t.predicted_box = cv::Rect(
+          static_cast<int>(cx - t.predicted_box.width / 2.0f),
+          static_cast<int>(cy - t.predicted_box.height / 2.0f),
+          t.predicted_box.width, 
+          t.predicted_box.height
+      );
+    } else {
+      t.predicted_box = t.last_box;
+    }
   }
 
   // 3. Greedy Matching
@@ -162,14 +229,17 @@ gst_onnxtracker_transform_ip (GstBaseTransform * base, GstBuffer * buf)
       det_matched[best_det_idx] = true;
       det_to_track[best_det_idx] = t.track_id;
       
-      // Update KF
+      // Update KF if in SORT mode
       cv::Rect best_box(detections[best_det_idx]->x, detections[best_det_idx]->y, detections[best_det_idx]->w, detections[best_det_idx]->h);
-      float cx = best_box.x + best_box.width / 2.0f;
-      float cy = best_box.y + best_box.height / 2.0f;
-      cv::Mat measurement = (cv::Mat_<float>(2, 1) << cx, cy);
-      
-      t.kf.correct(measurement);
+      if (filter->tracker_algorithm == GST_ONNX_TRACKER_ALGO_SORT) {
+        float cx = best_box.x + best_box.width / 2.0f;
+        float cy = best_box.y + best_box.height / 2.0f;
+        cv::Mat measurement = (cv::Mat_<float>(2, 1) << cx, cy);
+        
+        t.kf.correct(measurement);
+      }
       t.predicted_box = best_box; // update width/height
+      t.last_box = best_box;
       t.missed_frames = 0;
     } else {
       t.missed_frames++;
@@ -190,8 +260,12 @@ gst_onnxtracker_transform_ip (GstBaseTransform * base, GstBuffer * buf)
       t.track_id = new_id;
       t.missed_frames = 0;
       t.predicted_box = new_box;
+      t.last_box = new_box;
       t.label = detections[i]->label ? detections[i]->label : "";
-      init_kf(t.kf, new_box);
+      
+      if (filter->tracker_algorithm == GST_ONNX_TRACKER_ALGO_SORT) {
+        init_kf(t.kf, new_box);
+      }
       
       (*filter->active_tracks)[new_id] = std::move(t);
     }

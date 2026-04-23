@@ -23,11 +23,20 @@ G_BEGIN_DECLS
 typedef struct _Gstonnxtracker Gstonnxtracker;
 typedef struct _GstonnxtrackerClass GstonnxtrackerClass;
 
+typedef enum {
+  GST_ONNX_TRACKER_ALGO_IOU = 0,
+  GST_ONNX_TRACKER_ALGO_SORT = 1
+} GstOnnxTrackerAlgorithm;
+
+#define GST_TYPE_ONNX_TRACKER_ALGORITHM (gst_onnxtracker_algorithm_get_type())
+GType gst_onnxtracker_algorithm_get_type (void);
+
 struct Track {
   int track_id;
   int missed_frames;
   cv::KalmanFilter kf;
   cv::Rect predicted_box;
+  cv::Rect last_box; // Added to store the last known position for IoU tracking
   std::string label;
 };
 
@@ -36,6 +45,7 @@ struct _Gstonnxtracker {
 
   gint next_track_id;
   std::map<int, Track> *active_tracks;
+  GstOnnxTrackerAlgorithm tracker_algorithm;
 };
 
 struct _GstonnxtrackerClass {
