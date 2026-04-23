@@ -145,8 +145,8 @@ gst_onnxpostprocess_get_property (GObject * object, guint prop_id,
 
 const int INPUT_WIDTH = 640;
 const int INPUT_HEIGHT = 640;
-const float CONFIDENCE_THRESHOLD = 0.45f;
-const float NMS_THRESHOLD = 0.45f;
+const float CONFIDENCE_THRESHOLD = 0.3f;
+const float NMS_THRESHOLD = 0.3f;
 
 const std::vector<std::string> CLASS_NAMES = {
     "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
