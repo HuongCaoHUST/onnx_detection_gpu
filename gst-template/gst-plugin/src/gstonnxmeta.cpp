@@ -12,6 +12,7 @@ gst_onnx_meta_init (GstMeta * meta, gpointer params, GstBuffer * buffer)
   GstOnnxMeta *emeta = (GstOnnxMeta *) meta;
   emeta->track_id = -1;
   emeta->x = emeta->y = emeta->w = emeta->h = 0;
+  emeta->score = 0.0f;
   emeta->label = NULL;
   emeta->pts = GST_CLOCK_TIME_NONE;
   return TRUE;
@@ -29,7 +30,7 @@ gst_onnx_meta_transform (GstBuffer * transbuf, GstMeta * meta,
     GstBuffer * buffer, GQuark type, gpointer data)
 {
   GstOnnxMeta *emeta = (GstOnnxMeta *) meta;
-  gst_buffer_add_onnx_meta (transbuf, emeta->track_id, emeta->x, emeta->y, emeta->w, emeta->h, emeta->label, emeta->pts);
+  gst_buffer_add_onnx_meta (transbuf, emeta->track_id, emeta->x, emeta->y, emeta->w, emeta->h, emeta->score, emeta->label, emeta->pts);
   return TRUE;
 }
 
@@ -63,7 +64,7 @@ gst_onnx_meta_get_info (void)
 }
 
 GstOnnxMeta *
-gst_buffer_add_onnx_meta (GstBuffer * buffer, gint track_id, gint x, gint y, gint w, gint h, const gchar * label, GstClockTime pts)
+gst_buffer_add_onnx_meta (GstBuffer * buffer, gint track_id, gint x, gint y, gint w, gint h, gfloat score, const gchar * label, GstClockTime pts)
 {
   GstOnnxMeta *meta;
 
@@ -73,6 +74,7 @@ gst_buffer_add_onnx_meta (GstBuffer * buffer, gint track_id, gint x, gint y, gin
   meta->y = y;
   meta->w = w;
   meta->h = h;
+  meta->score = score;
   meta->label = g_strdup (label);
   meta->pts = pts;
 

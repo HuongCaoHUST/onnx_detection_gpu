@@ -266,7 +266,7 @@ gst_onnxpostprocess_transform (GstBaseTransform * base, GstBuffer * inbuf, GstBu
 
       /* Attach custom metadata to the output buffer */
       gst_buffer_add_onnx_meta (outbuf, -1, scaled_x, scaled_y, scaled_w, scaled_h,
-          CLASS_NAMES[class_id].c_str(), in_pts);
+          conf, CLASS_NAMES[class_id].c_str(), in_pts);
 
       if (GST_ONNXPOSTPROCESS (base)->draw_results) {
           cv::Mat frame(INPUT_HEIGHT, INPUT_WIDTH, CV_8UC3, img_out_map.data);

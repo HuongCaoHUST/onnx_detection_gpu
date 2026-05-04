@@ -17,6 +17,7 @@ struct _GstOnnxMeta {
 
   gint track_id;
   gint x, y, w, h;
+  gfloat score;        /* Detection confidence score [0.0, 1.0] */
   gchar *label;
   GstClockTime pts;
 };
@@ -30,7 +31,7 @@ const GstMetaInfo * gst_onnx_meta_get_info (void);
 #define gst_buffer_get_onnx_meta(b) \
   ((GstOnnxMeta*)gst_buffer_get_meta((b),GST_ONNX_META_API_TYPE))
 
-GstOnnxMeta * gst_buffer_add_onnx_meta (GstBuffer * buffer, gint track_id, gint x, gint y, gint w, gint h, const gchar * label, GstClockTime pts);
+GstOnnxMeta * gst_buffer_add_onnx_meta (GstBuffer * buffer, gint track_id, gint x, gint y, gint w, gint h, gfloat score, const gchar * label, GstClockTime pts);
 
 G_END_DECLS
 
