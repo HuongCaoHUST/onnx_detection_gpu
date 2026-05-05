@@ -53,7 +53,7 @@ else
     echo "Usage: $0 [draw_results=true|false] [duration_in_seconds]"
     echo ""
     /usr/bin/gst-launch-1.0 \
-        filesrc location=./test_video.mp4 ! decodebin ! videoconvert ! videorate ! video/x-raw,framerate=25/1 ! tee name=t \
+        filesrc location=./test_video_2.mp4 ! decodebin ! videoconvert ! videorate ! video/x-raw,framerate=25/1 ! tee name=t \
         t. ! queue max-size-buffers=5 ! onnxoverlay name=ov motion-compensation=linear ! videoconvert ! fpsdisplaysink sync=true \
-        t. ! queue max-size-buffers=3 leaky=downstream ! videorate drop-only=true ! video/x-raw,framerate=25/2 ! videoscale ! video/x-raw,format=RGB,width=640,height=640 ! onnxinference model-location=/home/huongcao/onnx_detection_gpu/yolo11n.onnx ! onnxpostprocess draw-results=false ! onnxtracker tracker-algorithm=sort ! ov.sink_meta
+        t. ! queue max-size-buffers=3 leaky=downstream ! videorate drop-only=true ! video/x-raw,framerate=25/2 ! videoscale ! video/x-raw,format=RGB,width=640,height=640 ! onnxinference model-location=/home/huongcao/onnx_detection_gpu/yolo11n.onnx ! onnxpostprocess conf-threshold=0.3 nms-threshold=0.45 draw-results=false ! onnxtracker tracker-algorithm=sort ! ov.sink_meta
 fi
