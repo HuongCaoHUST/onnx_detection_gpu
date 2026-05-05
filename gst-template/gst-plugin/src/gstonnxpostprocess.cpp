@@ -273,23 +273,13 @@ gst_onnxpostprocess_transform (GstBaseTransform * base, GstBuffer * inbuf, GstBu
 
   GST_INFO_OBJECT (base, "Detected %zu objects", indices.size());
 
-  /* Calculate scaling factors for coordinate conversion */
-  float scale_x = (float)GST_ONNXPOSTPROCESS (base)->original_width / 640.0f;
-  float scale_y = (float)GST_ONNXPOSTPROCESS (base)->original_height / 640.0f;
-
   for (int idx : indices) {
       cv::Rect box = boxes[idx];
       int class_id = class_ids[idx];
       float conf = confidences[idx];
 
-      /* Scale coordinates to original video size */
-      int scaled_x = (int)(box.x * scale_x);
-      int scaled_y = (int)(box.y * scale_y);
-      int scaled_w = (int)(box.width * scale_x);
-      int scaled_h = (int)(box.height * scale_y);
-
-      /* Attach custom metadata to the output buffer */
-      gst_buffer_add_onnx_meta (outbuf, -1, scaled_x, scaled_y, scaled_w, scaled_h,
+      /* Attach custom metadata to the output buffer using native 640x640 coordinates */
+      gst_buffer_add_onnx_meta (outbuf, -1, box.x, box.y, box.width, box.height,
           conf, CLASS_NAMES[class_id].c_str(), in_pts);
 
       if (GST_ONNXPOSTPROCESS (base)->draw_results) {
