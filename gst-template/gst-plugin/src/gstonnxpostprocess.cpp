@@ -18,6 +18,8 @@ enum
   PROP_DRAW_RESULTS,
   PROP_ORIGINAL_WIDTH,
   PROP_ORIGINAL_HEIGHT,
+  PROP_CONF_THRESHOLD,
+  PROP_NMS_THRESHOLD,
 };
 
 GST_DEBUG_CATEGORY_STATIC (gst_onnxpostprocess_debug);
@@ -68,6 +70,16 @@ gst_onnxpostprocess_class_init (GstonnxpostprocessClass * klass)
           "Original video height before resize to 640x640", 0, G_MAXINT, 0,
           (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
+  g_object_class_install_property (gobject_class, PROP_CONF_THRESHOLD,
+      g_param_spec_float ("conf-threshold", "Confidence Threshold",
+          "Confidence threshold for object detection", 0.0, 1.0, 0.45,
+          (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_NMS_THRESHOLD,
+      g_param_spec_float ("nms-threshold", "NMS Threshold",
+          "Non-maximum suppression threshold", 0.0, 1.0, 0.45,
+          (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
   gst_element_class_set_details_simple (gstelement_class,
       "ONNX Postprocess", "Filter/Video",
       "Performs bounding box drawing based on YOLO output tensor", "HuongCao <<user@hostname.org>>");
@@ -89,6 +101,8 @@ gst_onnxpostprocess_init (Gstonnxpostprocess * filter)
   filter->draw_results = TRUE;
   filter->original_width = 640;  /* Default to 640x640 (no scaling) */
   filter->original_height = 640;
+  filter->conf_threshold = 0.45f;
+  filter->nms_threshold = 0.45f;
 }
 
 static gboolean
@@ -115,6 +129,12 @@ gst_onnxpostprocess_set_property (GObject * object, guint prop_id,
     case PROP_ORIGINAL_HEIGHT:
       filter->original_height = g_value_get_int (value);
       break;
+    case PROP_CONF_THRESHOLD:
+      filter->conf_threshold = g_value_get_float (value);
+      break;
+    case PROP_NMS_THRESHOLD:
+      filter->nms_threshold = g_value_get_float (value);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -137,6 +157,12 @@ gst_onnxpostprocess_get_property (GObject * object, guint prop_id,
     case PROP_ORIGINAL_HEIGHT:
       g_value_set_int (value, filter->original_height);
       break;
+    case PROP_CONF_THRESHOLD:
+      g_value_set_float (value, filter->conf_threshold);
+      break;
+    case PROP_NMS_THRESHOLD:
+      g_value_set_float (value, filter->nms_threshold);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -145,8 +171,6 @@ gst_onnxpostprocess_get_property (GObject * object, guint prop_id,
 
 const int INPUT_WIDTH = 640;
 const int INPUT_HEIGHT = 640;
-const float CONFIDENCE_THRESHOLD = 0.45f;
-const float NMS_THRESHOLD = 0.45f;
 
 const std::vector<std::string> CLASS_NAMES = {
     "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
@@ -227,7 +251,7 @@ gst_onnxpostprocess_transform (GstBaseTransform * base, GstBuffer * inbuf, GstBu
           }
       }
 
-      if (max_conf > CONFIDENCE_THRESHOLD) {
+      if (max_conf > GST_ONNXPOSTPROCESS (base)->conf_threshold) {
           float cx = output_data[0 * num_boxes + i];
           float cy = output_data[1 * num_boxes + i];
           float w = output_data[2 * num_boxes + i];
@@ -245,7 +269,7 @@ gst_onnxpostprocess_transform (GstBaseTransform * base, GstBuffer * inbuf, GstBu
   }
 
   std::vector<int> indices;
-  cv::dnn::NMSBoxes(boxes, confidences, CONFIDENCE_THRESHOLD, NMS_THRESHOLD, indices);
+  cv::dnn::NMSBoxes(boxes, confidences, GST_ONNXPOSTPROCESS (base)->conf_threshold, GST_ONNXPOSTPROCESS (base)->nms_threshold, indices);
 
   GST_INFO_OBJECT (base, "Detected %zu objects", indices.size());
 

@@ -39,6 +39,9 @@ struct _Gstonnxpostprocess {
   /* Track original video dimensions for coordinate scaling */
   gint original_width;
   gint original_height;
+
+  gfloat conf_threshold;
+  gfloat nms_threshold;
 };
 
 G_END_DECLS
