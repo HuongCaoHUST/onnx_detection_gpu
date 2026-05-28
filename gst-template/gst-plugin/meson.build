@@ -60,6 +60,7 @@ gstonnxinferenceexample = library('gstonnxinference',
   install_dir : plugins_install_dir,
 )
 
+
 # Shared metadata library for ONNX plugins
 gstonnxmeta_lib = library('gstonnxmeta-shared',
   'src/gstonnxmeta.cpp',
@@ -67,6 +68,21 @@ gstonnxmeta_lib = library('gstonnxmeta-shared',
   cpp_args: plugin_c_args,
   dependencies : [gst_dep],
   install : false,
+)
+
+# The onnxclassifier Plugin
+gstonnxclassifier_sources = [
+  'src/gstonnxclassifier.cpp',
+]
+
+gstonnxclassifierexample = library('gstonnxclassifier',
+  gstonnxclassifier_sources,
+  c_args: plugin_c_args,
+  cpp_args: plugin_c_args,
+  dependencies : [gst_dep, gstbase_dep, opencv_dep, onnxruntime_dep],
+  link_with: gstonnxmeta_lib,
+  install : true,
+  install_dir : plugins_install_dir,
 )
 
 # The onnxpostprocess Plugin

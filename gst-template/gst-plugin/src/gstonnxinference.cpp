@@ -156,13 +156,18 @@ gst_onnxinference_start (GstBaseTransform * base)
     Ort::SessionOptions session_options;
     
     // Enable CUDA provider if available, otherwise fallback to CPU
-    try {
-      OrtCUDAProviderOptions cuda_options;
-      cuda_options.device_id = 0;
-      session_options.AppendExecutionProvider_CUDA(cuda_options);
-      GST_INFO_OBJECT (filter, "Using CUDA execution provider");
-    } catch (const Ort::Exception& e) {
-      GST_WARNING_OBJECT (filter, "CUDA provider not available (%s). Using CPU instead.", e.what());
+    const char* disable_cuda = getenv("ORT_DISABLE_CUDA");
+    if (!disable_cuda || strcmp(disable_cuda, "1") != 0) {
+        try {
+          OrtCUDAProviderOptions cuda_options;
+          cuda_options.device_id = 0;
+          session_options.AppendExecutionProvider_CUDA(cuda_options);
+          GST_INFO_OBJECT (filter, "Using CUDA execution provider");
+        } catch (const Ort::Exception& e) {
+          GST_WARNING_OBJECT (filter, "CUDA provider not available (%s). Using CPU instead.", e.what());
+        }
+    } else {
+        GST_INFO_OBJECT (filter, "CUDA execution provider disabled via ORT_DISABLE_CUDA");
     }
     
     filter->session = new Ort::Session(*filter->env, filter->model_location, session_options);

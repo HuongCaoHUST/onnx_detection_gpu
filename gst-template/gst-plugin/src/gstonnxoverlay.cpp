@@ -327,8 +327,22 @@ gst_onnxoverlay_sink_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
               int y = (int)(raw_y * scale_y);
               int w = (int)(raw_w * scale_x);
               int h = (int)(raw_h * scale_y);
+              
+              cv::Scalar color;
+              if (ometa->label && strstr(ometa->label, "UNSAFE") != nullptr) {
+                  if (strstr(ometa->label, "Helmet") != nullptr) {
+                      // Purple / Magenta (R=255, B=255) is the same in RGB and BGR
+                      color = cv::Scalar(255, 0, 255);
+                  } else {
+                      // If format is BGR(x), Red is (0, 0, 255). If RGB(x), Red is (255, 0, 0)
+                      bool is_bgr = (g_str_has_prefix (format, "BGR"));
+                      color = is_bgr ? cv::Scalar(0, 0, 255) : cv::Scalar(255, 0, 0); 
+                  }
+              } else {
+                  color = cv::Scalar(0, 255, 0); // Green
+              }
 
-              cv::rectangle(img, cv::Rect(x, y, w, h), cv::Scalar(0, 255, 0), 2);
+              cv::rectangle(img, cv::Rect(x, y, w, h), color, 2);
               if (ometa->label) {
                 std::string display_label = ometa->label;
                 GST_DEBUG_OBJECT (filter, "Drawing label %s with track_id %d", ometa->label, ometa->track_id);
@@ -336,7 +350,7 @@ gst_onnxoverlay_sink_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
                   display_label += " #" + std::to_string(ometa->track_id);
                 }
                 cv::putText(img, display_label, cv::Point(x, y - 5),
-                    cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 1);
+                    cv::FONT_HERSHEY_SIMPLEX, 0.5, color, 1);
               }
             }
           }
