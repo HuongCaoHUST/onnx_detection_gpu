@@ -52,8 +52,8 @@ else
     echo "Running indefinitely using Webcam (close window to stop)..."
     echo "Usage: $0 [draw_results=true|false] [duration_in_seconds]"
     echo ""
-    timeout 60 /usr/bin/gst-launch-1.0 -v \
-        filesrc location=./test_video_3.mp4 ! decodebin ! videoconvert ! videorate ! video/x-raw,framerate=25/1 ! tee name=t \
-        t. ! queue max-size-buffers=10 ! onnxoverlay name=ov motion-compensation=false ! videoconvert ! video/x-raw,format=I420 ! x264enc tune=zerolatency ! matroskamux ! filesink location=output_new_6.mkv sync=true \
-        t. ! queue max-size-buffers=2 leaky=downstream ! videorate drop-only=true ! video/x-raw,framerate=25/2 ! videoscale ! video/x-raw,format=RGB,width=640,height=640 ! onnxinference model-location=/home/huongcao/onnx_detection_gpu/yolo11n.onnx ! onnxpostprocess conf-threshold=0.3 nms-threshold=0.45 draw-results=false ! onnxtracker tracker-algorithm=sort ! ov.sink_meta
+    timeout 120 /usr/bin/gst-launch-1.0 -v \
+        filesrc location=./coal_test_video.mp4 ! decodebin ! videoconvert ! videorate ! video/x-raw,framerate=25/1 ! tee name=t \
+        t. ! queue max-size-buffers=10 ! onnxoverlay name=ov motion-compensation=linear ! videoconvert ! video/x-raw,format=I420 ! x264enc tune=zerolatency ! matroskamux ! filesink location=output_new_6.mkv sync=true \
+        t. ! queue max-size-buffers=2 leaky=downstream ! videorate drop-only=true ! video/x-raw,framerate=25/2 ! videoscale ! video/x-raw,format=RGB,width=640,height=640 ! onnxinference model-location=yolo11n.onnx ! onnxpostprocess conf-threshold=0.3 nms-threshold=0.45 draw-results=false filter-classes="0" ! onnxtracker tracker-algorithm=sort ! ov.sink_meta
 fi

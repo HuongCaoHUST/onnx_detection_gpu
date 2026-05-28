@@ -4,3 +4,5 @@ gst-plugin-overlay
 gst-plugin-vcomposer
 output
 *.mkv
+*.pt
+*.onnx

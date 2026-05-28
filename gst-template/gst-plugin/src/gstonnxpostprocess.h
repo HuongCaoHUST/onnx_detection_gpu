@@ -42,6 +42,10 @@ struct _Gstonnxpostprocess {
 
   gfloat conf_threshold;
   gfloat nms_threshold;
+
+  gchar *filter_classes;
+  gint *filter_ids;
+  guint num_filter_ids;
 };
 
 G_END_DECLS

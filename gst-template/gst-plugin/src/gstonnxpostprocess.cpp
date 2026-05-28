@@ -20,6 +20,7 @@ enum
   PROP_ORIGINAL_HEIGHT,
   PROP_CONF_THRESHOLD,
   PROP_NMS_THRESHOLD,
+  PROP_FILTER_CLASSES,
 };
 
 GST_DEBUG_CATEGORY_STATIC (gst_onnxpostprocess_debug);
@@ -44,6 +45,7 @@ static GstFlowReturn gst_onnxpostprocess_transform (GstBaseTransform * base, Gst
 static gboolean gst_onnxpostprocess_transform_size (GstBaseTransform * base, GstPadDirection direction, GstCaps * caps, gsize size, GstCaps * othercaps, gsize * othersize);
 static void gst_onnxpostprocess_set_property (GObject * object, guint prop_id, const GValue * value, GParamSpec * pspec);
 static void gst_onnxpostprocess_get_property (GObject * object, guint prop_id, GValue * value, GParamSpec * pspec);
+static void gst_onnxpostprocess_finalize (GObject * object);
 
 static void
 gst_onnxpostprocess_class_init (GstonnxpostprocessClass * klass)
@@ -54,6 +56,7 @@ gst_onnxpostprocess_class_init (GstonnxpostprocessClass * klass)
 
   gobject_class->set_property = gst_onnxpostprocess_set_property;
   gobject_class->get_property = gst_onnxpostprocess_get_property;
+  gobject_class->finalize = gst_onnxpostprocess_finalize;
 
   g_object_class_install_property (gobject_class, PROP_DRAW_RESULTS,
       g_param_spec_boolean ("draw-results", "Draw Results",
@@ -80,6 +83,11 @@ gst_onnxpostprocess_class_init (GstonnxpostprocessClass * klass)
           "Non-maximum suppression threshold", 0.0, 1.0, 0.45,
           (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
+  g_object_class_install_property (gobject_class, PROP_FILTER_CLASSES,
+      g_param_spec_string ("filter-classes", "Filter Classes",
+          "Comma-separated list of class IDs to filter (e.g. '0,2'). Empty means no filter.", "",
+          (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
   gst_element_class_set_details_simple (gstelement_class,
       "ONNX Postprocess", "Filter/Video",
       "Performs bounding box drawing based on YOLO output tensor", "HuongCao <<user@hostname.org>>");
@@ -103,6 +111,18 @@ gst_onnxpostprocess_init (Gstonnxpostprocess * filter)
   filter->original_height = 640;
   filter->conf_threshold = 0.45f;
   filter->nms_threshold = 0.45f;
+  filter->filter_classes = NULL;
+  filter->filter_ids = NULL;
+  filter->num_filter_ids = 0;
+}
+
+static void
+gst_onnxpostprocess_finalize (GObject * object)
+{
+  Gstonnxpostprocess *filter = GST_ONNXPOSTPROCESS (object);
+  g_free (filter->filter_classes);
+  g_free (filter->filter_ids);
+  G_OBJECT_CLASS (parent_class)->finalize (object);
 }
 
 static gboolean
@@ -135,6 +155,31 @@ gst_onnxpostprocess_set_property (GObject * object, guint prop_id,
     case PROP_NMS_THRESHOLD:
       filter->nms_threshold = g_value_get_float (value);
       break;
+    case PROP_FILTER_CLASSES:
+      g_free (filter->filter_classes);
+      filter->filter_classes = g_value_dup_string (value);
+      g_free (filter->filter_ids);
+      filter->filter_ids = NULL;
+      filter->num_filter_ids = 0;
+      if (filter->filter_classes && strlen (filter->filter_classes) > 0) {
+        gchar **split = g_strsplit (filter->filter_classes, ",", -1);
+        guint count = g_strv_length (split);
+        if (count > 0) {
+          filter->filter_ids = g_new0 (gint, count);
+          for (guint i = 0; i < count; i++) {
+            gchar *endptr = NULL;
+            gchar *str = g_strstrip (split[i]);
+            if (strlen(str) > 0) {
+              gint id = strtol (str, &endptr, 10);
+              if (endptr != str) {
+                filter->filter_ids[filter->num_filter_ids++] = id;
+              }
+            }
+          }
+        }
+        g_strfreev (split);
+      }
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -162,6 +207,9 @@ gst_onnxpostprocess_get_property (GObject * object, guint prop_id,
       break;
     case PROP_NMS_THRESHOLD:
       g_value_set_float (value, filter->nms_threshold);
+      break;
+    case PROP_FILTER_CLASSES:
+      g_value_set_string (value, filter->filter_classes);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -252,19 +300,33 @@ gst_onnxpostprocess_transform (GstBaseTransform * base, GstBuffer * inbuf, GstBu
       }
 
       if (max_conf > GST_ONNXPOSTPROCESS (base)->conf_threshold) {
-          float cx = output_data[0 * num_boxes + i];
-          float cy = output_data[1 * num_boxes + i];
-          float w = output_data[2 * num_boxes + i];
-          float h = output_data[3 * num_boxes + i];
+          Gstonnxpostprocess *filter = GST_ONNXPOSTPROCESS (base);
+          bool allowed = true;
+          if (filter->num_filter_ids > 0) {
+              allowed = false;
+              for (guint f = 0; f < filter->num_filter_ids; f++) {
+                  if (best_class_id == filter->filter_ids[f]) {
+                      allowed = true;
+                      break;
+                  }
+              }
+          }
 
-          int left = static_cast<int>((cx - w / 2) * x_scale);
-          int top  = static_cast<int>((cy - h / 2) * y_scale);
-          int width = static_cast<int>(w * x_scale);
-          int height = static_cast<int>(h * y_scale);
+          if (allowed) {
+              float cx = output_data[0 * num_boxes + i];
+              float cy = output_data[1 * num_boxes + i];
+              float w = output_data[2 * num_boxes + i];
+              float h = output_data[3 * num_boxes + i];
 
-          boxes.push_back(cv::Rect(left, top, width, height));
-          confidences.push_back(max_conf);
-          class_ids.push_back(best_class_id);
+              int left = static_cast<int>((cx - w / 2) * x_scale);
+              int top  = static_cast<int>((cy - h / 2) * y_scale);
+              int width = static_cast<int>(w * x_scale);
+              int height = static_cast<int>(h * y_scale);
+
+              boxes.push_back(cv::Rect(left, top, width, height));
+              confidences.push_back(max_conf);
+              class_ids.push_back(best_class_id);
+          }
       }
   }
 
