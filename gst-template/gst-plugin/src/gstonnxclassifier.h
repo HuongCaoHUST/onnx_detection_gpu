@@ -12,9 +12,10 @@
 /* ONNX Runtime includes */
 #include <onnxruntime_cxx_api.h>
 #include <map>
+#include <string>
 
 struct ClassifierTrackState {
-    int consecutive_unsafe;
+    std::map<std::string, int> missing_item_counts;
 };
 
 G_BEGIN_DECLS

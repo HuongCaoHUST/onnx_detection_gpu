@@ -11,6 +11,7 @@
 #include <opencv2/opencv.hpp>
 #include "gstonnxoverlay.h"
 #include "gstonnxmeta.h"
+#include <sys/stat.h>
 
 #include <queue>
 #include <mutex>
@@ -247,6 +248,30 @@ gst_onnxoverlay_sink_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
           GST_DEBUG_OBJECT (filter, "Overlaying %d metadata items on video frame",
               gst_buffer_n_memory (meta_buf));
 
+          // Pre-scan to see if we need to clone the image for saving violation crops
+          cv::Mat clean_img;
+          bool needs_save = false;
+          gpointer pre_state = NULL;
+          GstMeta *pre_meta;
+          while ((pre_meta = gst_buffer_iterate_meta (meta_buf, &pre_state))) {
+            if (pre_meta->info->api == GST_ONNX_META_API_TYPE) {
+              GstOnnxMeta *ometa = (GstOnnxMeta *) pre_meta;
+              if (ometa->label && strstr(ometa->label, "UNSAFE") != nullptr) {
+                  // We will save for ANY unsafe condition just so you can see it working!
+                  if (ometa->track_id >= 0 && filter->track_states->count(ometa->track_id)) {
+                      auto& ts = (*filter->track_states)[ometa->track_id];
+                      if (!ts.has_saved_violation) {
+                          needs_save = true;
+                          break;
+                      }
+                  }
+              }
+            }
+          }
+          if (needs_save) {
+              clean_img = img.clone(); // Clone before any bboxes are drawn!
+          }
+
           while ((meta = gst_buffer_iterate_meta (meta_buf, &state))) {
             if (meta->info->api == GST_ONNX_META_API_TYPE) {
               GstOnnxMeta *ometa = (GstOnnxMeta *) meta;
@@ -272,7 +297,7 @@ gst_onnxoverlay_sink_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
                         ts.dh = (raw_h - ts.last_h) / dt_ns;
                     }
                   } else {
-                    (*filter->track_states)[track_id] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, GST_CLOCK_TIME_NONE};
+                    (*filter->track_states)[track_id] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, GST_CLOCK_TIME_NONE, false};
                   }
                   auto& ts = (*filter->track_states)[track_id];
                   // Lưu điểm cũ để clamp
@@ -337,6 +362,36 @@ gst_onnxoverlay_sink_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
                       // If format is BGR(x), Red is (0, 0, 255). If RGB(x), Red is (255, 0, 0)
                       bool is_bgr = (g_str_has_prefix (format, "BGR"));
                       color = is_bgr ? cv::Scalar(0, 0, 255) : cv::Scalar(255, 0, 0); 
+                  }
+                  
+                  // Crop and save violation (only once per track_id) - NOW SAVING FOR ANY UNSAFE CONDITION
+                  if (ometa->track_id >= 0 && filter->track_states->count(ometa->track_id)) {
+                      auto& ts = (*filter->track_states)[ometa->track_id];
+                      if (!ts.has_saved_violation) {
+                          int safe_x = std::max(0, x);
+                          int safe_y = std::max(0, y);
+                          int safe_w = std::min(width - safe_x, w);
+                          int safe_h = std::min(height - safe_y, h);
+                          if (safe_w > 0 && safe_h > 0 && !clean_img.empty()) {
+                              cv::Mat roi = clean_img(cv::Rect(safe_x, safe_y, safe_w, safe_h));
+                              cv::Mat save_img;
+                              bool is_bgr = (g_str_has_prefix (format, "BGR"));
+                              if (!is_bgr) {
+                                  cv::cvtColor(roi, save_img, cv::COLOR_RGB2BGR);
+                              } else {
+                                  save_img = roi;
+                              }
+                              struct stat st = {0};
+                              if (stat("Alarm", &st) == -1) {
+                                  mkdir("Alarm", 0777);
+                              }
+                              char filename[256];
+                              snprintf(filename, sizeof(filename), "Alarm/violation_track_%d.jpg", ometa->track_id);
+                              cv::imwrite(filename, save_img);
+                              GST_INFO_OBJECT (filter, "Saved violation crop to %s", filename);
+                              ts.has_saved_violation = true;
+                          }
+                      }
                   }
               } else {
                   color = cv::Scalar(0, 255, 0); // Green

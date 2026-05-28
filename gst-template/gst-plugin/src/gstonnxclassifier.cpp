@@ -14,6 +14,7 @@
 #include <iostream>
 #include <string>
 #include <cmath>
+#include <algorithm>
 
 GST_DEBUG_CATEGORY_STATIC (gst_onnxclassifier_debug);
 #define GST_CAT_DEFAULT gst_onnxclassifier_debug
@@ -364,7 +365,7 @@ gst_onnxclassifier_transform_ip (GstBaseTransform * base, GstBuffer * buf)
           auto shape = type_info.GetShape();
           int num_classes = shape.size() > 1 ? shape[1] : shape[0]; // handle both [1, N] and [N]
           
-          std::vector<std::string> missing_items;
+          std::vector<std::string> current_missing_items;
           float threshold = filter->threshold; // Sử dụng giá trị từ thuộc tính GStreamer
 
           for (int c = 0; c < num_classes; ++c) {
@@ -376,42 +377,53 @@ gst_onnxclassifier_transform_ip (GstBaseTransform * base, GstBuffer * buf)
                   
                   // Tạm thời bỏ qua nhãn "Mask" theo yêu cầu
                   if (label_name != "Mask" && label_name != "mask") {
-                      missing_items.push_back(label_name);
+                      current_missing_items.push_back(label_name);
                   }
               }
           }
 
-          std::string class_str;
-          bool current_is_safe = missing_items.empty();
-          bool report_safe = current_is_safe;
+          std::vector<std::string> final_missing_items;
           
           if (ometa->track_id >= 0) {
               if (filter->track_states->find(ometa->track_id) == filter->track_states->end()) {
-                  (*filter->track_states)[ometa->track_id] = {0};
+                  (*filter->track_states)[ometa->track_id] = ClassifierTrackState();
               }
               auto& state = (*filter->track_states)[ometa->track_id];
               
-              if (current_is_safe) {
-                  state.consecutive_unsafe = 0;
-                  report_safe = true;
-              } else {
-                  state.consecutive_unsafe++;
-                  if (state.consecutive_unsafe >= 5) {
-                      report_safe = false;
+              // Increment counters for currently missing items
+              for (const auto& item : current_missing_items) {
+                  state.missing_item_counts[item]++;
+              }
+              
+              // Reset counters for items that are now present
+              for (auto it = state.missing_item_counts.begin(); it != state.missing_item_counts.end(); ) {
+                  if (std::find(current_missing_items.begin(), current_missing_items.end(), it->first) == current_missing_items.end()) {
+                      it = state.missing_item_counts.erase(it);
                   } else {
-                      // Still report as safe to avoid false alarms
-                      report_safe = true;
+                      ++it;
                   }
               }
+              
+              // Only report missing if count >= 5
+              for (const auto& kv : state.missing_item_counts) {
+                  if (kv.second >= 5) {
+                      final_missing_items.push_back(kv.first);
+                  }
+              }
+          } else {
+              final_missing_items = current_missing_items;
           }
+
+          std::string class_str;
+          bool report_safe = final_missing_items.empty();
 
           if (report_safe) {
               class_str = "SAFE";
           } else {
               class_str = "UNSAFE (-";
-              for (size_t i = 0; i < missing_items.size(); ++i) {
-                  class_str += missing_items[i];
-                  if (i < missing_items.size() - 1) class_str += ",";
+              for (size_t i = 0; i < final_missing_items.size(); ++i) {
+                  class_str += final_missing_items[i];
+                  if (i < final_missing_items.size() - 1) class_str += ",";
               }
               class_str += ")";
           }

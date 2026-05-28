@@ -28,6 +28,7 @@ struct TrackVelocityState {
     float prev_x, prev_y, prev_w, prev_h;
     float dx, dy, dw, dh;
     GstClockTime last_pts;
+    bool has_saved_violation;
 };
 
 
