@@ -256,14 +256,23 @@ gst_onnxoverlay_sink_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
           while ((pre_meta = gst_buffer_iterate_meta (meta_buf, &pre_state))) {
             if (pre_meta->info->api == GST_ONNX_META_API_TYPE) {
               GstOnnxMeta *ometa = (GstOnnxMeta *) pre_meta;
-              if (ometa->label && strstr(ometa->label, "UNSAFE") != nullptr) {
-                  // We will save for ANY unsafe condition just so you can see it working!
-                  if (ometa->track_id >= 0 && filter->track_states->count(ometa->track_id)) {
-                      auto& ts = (*filter->track_states)[ometa->track_id];
-                      if (!ts.has_saved_violation) {
-                          needs_save = true;
-                          break;
-                      }
+              if (ometa->track_id >= 0) {
+                  // Ensure state exists
+                  if (filter->track_states->find(ometa->track_id) == filter->track_states->end()) {
+                      // default initialization, consecutive_purple_frames will be 0 if we initialize it cleanly
+                      TrackVelocityState new_state = {0,0,0,0,0,0,0,0,0,0,false,0};
+                      (*filter->track_states)[ometa->track_id] = new_state;
+                  }
+                  auto& ts = (*filter->track_states)[ometa->track_id];
+                  
+                  if (ometa->label && strstr(ometa->label, "UNSAFE") != nullptr && strstr(ometa->label, "Helmet") != nullptr) {
+                      ts.consecutive_purple_frames++;
+                  } else {
+                      ts.consecutive_purple_frames = 0;
+                  }
+                  
+                  if (ts.consecutive_purple_frames >= 5 && !ts.has_saved_violation) {
+                      needs_save = true;
                   }
               }
             }
@@ -364,10 +373,10 @@ gst_onnxoverlay_sink_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
                       color = is_bgr ? cv::Scalar(0, 0, 255) : cv::Scalar(255, 0, 0); 
                   }
                   
-                  // Crop and save violation (only once per track_id) - NOW SAVING FOR ANY UNSAFE CONDITION
+                  // Crop and save violation (only once per track_id, and only after 5 purple frames)
                   if (ometa->track_id >= 0 && filter->track_states->count(ometa->track_id)) {
                       auto& ts = (*filter->track_states)[ometa->track_id];
-                      if (!ts.has_saved_violation) {
+                      if (ts.consecutive_purple_frames >= 5 && !ts.has_saved_violation) {
                           int safe_x = std::max(0, x);
                           int safe_y = std::max(0, y);
                           int safe_w = std::min(width - safe_x, w);
