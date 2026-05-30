@@ -1,11 +1,10 @@
-version: '3.8'
-
 services:
   onnx_pipeline:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: onnx_pipeline_container
+    cpus: 2.0
     environment:
       - DISPLAY=$DISPLAY
     volumes:

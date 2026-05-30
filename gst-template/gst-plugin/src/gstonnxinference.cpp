@@ -91,6 +91,8 @@ gst_onnxinference_init (Gstonnxinference * filter)
   filter->session = NULL;
   filter->memory_info = NULL;
   filter->allocator = NULL;
+  filter->input_name = NULL;
+  filter->output_name = NULL;
 }
 
 static void
@@ -104,6 +106,8 @@ gst_onnxinference_finalize (GObject * object)
   if (filter->env) delete filter->env;
   if (filter->memory_info) delete filter->memory_info;
   if (filter->allocator) delete filter->allocator;
+  g_free (filter->input_name);
+  g_free (filter->output_name);
 
   G_OBJECT_CLASS (parent_class)->finalize (object);
 }
@@ -154,6 +158,9 @@ gst_onnxinference_start (GstBaseTransform * base)
   try {
     filter->env = new Ort::Env(ORT_LOGGING_LEVEL_WARNING, "YOLO11");
     Ort::SessionOptions session_options;
+    session_options.SetIntraOpNumThreads(1);
+    session_options.SetInterOpNumThreads(1);
+    session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
     
     // Enable CUDA provider if available, otherwise fallback to CPU
     const char* disable_cuda = getenv("ORT_DISABLE_CUDA");
@@ -173,6 +180,8 @@ gst_onnxinference_start (GstBaseTransform * base)
     filter->session = new Ort::Session(*filter->env, filter->model_location, session_options);
     filter->allocator = new Ort::AllocatorWithDefaultOptions();
     filter->memory_info = new Ort::MemoryInfo(Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault));
+    filter->input_name = g_strdup(filter->session->GetInputNameAllocated(0, *filter->allocator).get());
+    filter->output_name = g_strdup(filter->session->GetOutputNameAllocated(0, *filter->allocator).get());
     GST_INFO_OBJECT (filter, "ONNX session initialized successfully.");
   } catch (const Ort::Exception& e) {
     GST_ERROR_OBJECT (filter, "ONNX Runtime initialization failed: %s", e.what());
@@ -191,6 +200,8 @@ gst_onnxinference_stop (GstBaseTransform * base)
   if (filter->env) { delete filter->env; filter->env = NULL; }
   if (filter->memory_info) { delete filter->memory_info; filter->memory_info = NULL; }
   if (filter->allocator) { delete filter->allocator; filter->allocator = NULL; }
+  g_free (filter->input_name); filter->input_name = NULL;
+  g_free (filter->output_name); filter->output_name = NULL;
 
   return TRUE;
 }
@@ -250,11 +261,8 @@ gst_onnxinference_transform (GstBaseTransform * base, GstBuffer * inbuf, GstBuff
       Ort::Value input_tensor = Ort::Value::CreateTensor<float>(
           *filter->memory_info, input_tensor_values.data(), input_tensor_values.size(), input_shape.data(), input_shape.size());
 
-      std::string input_name_str = filter->session->GetInputNameAllocated(0, *filter->allocator).get();
-      std::string output_name_str = filter->session->GetOutputNameAllocated(0, *filter->allocator).get();
-      
-      const char* input_names[] = { input_name_str.c_str() };
-      const char* output_names[] = { output_name_str.c_str() };
+      const char* input_names[] = { filter->input_name };
+      const char* output_names[] = { filter->output_name };
 
       auto output_tensors = filter->session->Run(Ort::RunOptions{nullptr}, input_names, &input_tensor, 1, output_names, 1);
       

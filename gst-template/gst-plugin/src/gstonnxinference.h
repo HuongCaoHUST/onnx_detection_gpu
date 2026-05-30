@@ -48,11 +48,15 @@ struct _Gstonnxinference {
   Ort::Session *session;
   Ort::MemoryInfo *memory_info;
   Ort::AllocatorWithDefaultOptions *allocator;
+  gchar *input_name;
+  gchar *output_name;
 #else
   gpointer env;
   gpointer session;
   gpointer memory_info;
   gpointer allocator;
+  gpointer input_name;
+  gpointer output_name;
 #endif
 };
 

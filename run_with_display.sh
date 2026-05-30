@@ -4,7 +4,11 @@
 export GST_PLUGIN_PATH=/app/gst-template/builddir/gst-plugin
 export LD_LIBRARY_PATH=/opt/onnxruntime/lib:$LD_LIBRARY_PATH
 export ORT_DISABLE_CUDA=1
-export GST_DEBUG=onnxoverlay:5,onnxpostprocess:5,onnxinference:5
+export GST_DEBUG=${GST_DEBUG:-1}
+export OMP_NUM_THREADS=${OMP_NUM_THREADS:-1}
+export OPENBLAS_NUM_THREADS=${OPENBLAS_NUM_THREADS:-1}
+export MKL_NUM_THREADS=${MKL_NUM_THREADS:-1}
+export OPENCV_FOR_THREADS_NUM=${OPENCV_FOR_THREADS_NUM:-1}
 
 # Tìm X11 display hoạt động
 if [ -z "$DISPLAY" ]; then

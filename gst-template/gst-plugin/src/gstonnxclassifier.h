@@ -41,6 +41,8 @@ struct _Gstonnxclassifier {
   Ort::Session *session;
   Ort::MemoryInfo *memory_info;
   Ort::AllocatorWithDefaultOptions *allocator;
+  gchar *input_name;
+  gchar *output_name;
   
   std::map<int, ClassifierTrackState> *track_states;
 };
