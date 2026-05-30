@@ -1,7 +1,7 @@
 #!/bin/bash
 # Pipeline GStreamer với YOLO inference - đơn giản, ổn định
 
-export GST_PLUGIN_PATH=/home/huongcao/onnx_detection_gpu/gst-template/builddir/gst-plugin
+export GST_PLUGIN_PATH=/app/gst-template/builddir/gst-plugin
 export LD_LIBRARY_PATH=/opt/onnxruntime/lib:$LD_LIBRARY_PATH
 export ORT_DISABLE_CUDA=1
 export GST_DEBUG=onnxoverlay:5,onnxpostprocess:5,onnxinference:5
@@ -27,8 +27,8 @@ rm -rf ~/.cache/gstreamer-*
 
 echo "Starting GStreamer YOLO detection pipeline..."
 echo "Using:"
-echo "  Video: /home/huongcao/onnx_detection_gpu/test_video.mp4"
-echo "  Model: /home/huongcao/onnx_detection_gpu/yolo11n.onnx"
+echo "  Video: /app/test_video.mp4"
+echo "  Model: /app/yolo11n.onnx"
 echo "  GStreamer plugins: $GST_PLUGIN_PATH"
 echo "  Display: $DISPLAY"
 echo ""
@@ -39,21 +39,30 @@ echo ""
 # Parse arguments
 DRAW_RESULTS="${1:-true}"
 DURATION="${2:-}"
+CLASSIFIER_TYPE="${3:-efficientnet}"
+
+if [ "$CLASSIFIER_TYPE" = "vit" ]; then
+    CLASSIFIER_MODEL_1="/app/ppe_vit_small.onnx"
+    CLASSIFIER_MODEL_2="/app/ppe_vit_small.onnx"
+else
+    CLASSIFIER_MODEL_1="/app/ppe_efficientnet_lite0_best.onnx"
+    CLASSIFIER_MODEL_2="/app/ppe_efficientnet_lite0_best.onnx"
+fi
 
 if [ -n "$DURATION" ]; then
     # Run with timeout
     echo "Running for $DURATION seconds..."
     timeout $DURATION /usr/bin/gst-launch-1.0 -v \
-        filesrc location=/home/huongcao/onnx_detection_gpu/test_video.mp4 ! decodebin ! videoconvert ! videorate ! video/x-raw,framerate=25/1 ! tee name=t \
+        filesrc location=/app/test_video.mp4 ! decodebin ! videoconvert ! videorate ! video/x-raw,framerate=25/1 ! tee name=t \
         t. ! queue max-size-buffers=20 ! onnxoverlay name=ov motion-compensation=false ! videoconvert ! video/x-raw,format=I420 ! x264enc tune=zerolatency ! matroskamux ! filesink location=output_3.mkv sync=true \
-        t. ! queue max-size-buffers=20 leaky=no ! videorate drop-only=true ! video/x-raw,framerate=25/2 ! videoscale ! video/x-raw,format=RGB,width=640,height=640 ! onnxinference model-location=/home/huongcao/onnx_detection_gpu/yolo11n.onnx ! onnxpostprocess draw-results=false ! onnxtracker tracker-algorithm=sort ! onnxclassifier model-location=/home/huongcao/onnx_detection_gpu/ppe_efficientnet_lite0.onnx labels="Helmet,Lamp,Mask,Shoes,Suit" threshold=0.34 ! ov.sink_meta
+        t. ! queue max-size-buffers=20 leaky=no ! videorate drop-only=true ! video/x-raw,framerate=25/2 ! videoscale ! video/x-raw,format=RGB,width=640,height=640 ! onnxinference model-location=/app/yolo11n.onnx ! onnxpostprocess draw-results=false ! onnxtracker tracker-algorithm=sort ! onnxclassifier model-location="$CLASSIFIER_MODEL_1" labels="Helmet,Lamp,Mask,Shoes,Suit" threshold=0.34 ! ov.sink_meta
 else
     # Run indefinitely from Webcam
     echo "Running indefinitely using Webcam (close window to stop)..."
-    echo "Usage: $0 [draw_results=true|false] [duration_in_seconds]"
+    echo "Usage: $0 [draw_results=true|false] [duration_in_seconds] [classifier=efficientnet|vit]"
     echo ""
     timeout 200 /usr/bin/gst-launch-1.0 -v \
-        filesrc location="./Download (4).mp4" ! decodebin ! videoconvert ! videorate ! video/x-raw,framerate=25/1 ! tee name=t \
-        t. ! queue max-size-buffers=10 ! onnxoverlay name=ov motion-compensation=forward ! videoconvert ! video/x-raw,format=I420 ! x264enc tune=zerolatency ! matroskamux ! filesink location=output_new_6.mkv sync=true \
-        t. ! queue max-size-buffers=2 leaky=downstream ! videorate drop-only=true ! video/x-raw,framerate=25/2 ! videoscale ! video/x-raw,format=RGB,width=640,height=640 ! onnxinference model-location=yolo11n.onnx ! onnxpostprocess conf-threshold=0.3 nms-threshold=0.45 draw-results=false filter-classes="0" ! onnxtracker tracker-algorithm=bytetrack ! onnxclassifier model-location=ppe_efficientnet_lite0_best.onnx labels="Helmet,Lamp,Mask,Shoes,Suit" threshold=0.34 ! ov.sink_meta
+        filesrc location="/app/coal_test_video.mp4" ! decodebin ! videoconvert ! videorate ! video/x-raw,framerate=25/1 ! tee name=t \
+        t. ! queue max-size-buffers=20 ! onnxoverlay name=ov motion-compensation=linear ! videoconvert ! autovideosink sync=true \
+        t. ! queue max-size-buffers=1 leaky=downstream ! videorate drop-only=true ! video/x-raw,framerate=5/1 ! videoscale ! video/x-raw,format=RGB,width=640,height=640 ! onnxinference model-location=/app/yolo11n.onnx ! onnxpostprocess conf-threshold=0.3 nms-threshold=0.45 draw-results=false filter-classes="0" ! onnxtracker tracker-algorithm=bytetrack ! onnxclassifier model-location="/app/ppe_efficientnet_lite0_best.onnx" labels="Helmet,Lamp,Mask,Shoes,Suit" threshold=0.34 ! ov.sink_meta
 fi
