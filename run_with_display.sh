@@ -68,5 +68,5 @@ else
     timeout 200 /usr/bin/gst-launch-1.0 -v \
         filesrc location="/app/coal_test_video.mp4" ! decodebin ! videoconvert ! videorate ! video/x-raw,framerate=25/1 ! tee name=t \
         t. ! queue max-size-buffers=20 ! onnxoverlay name=ov motion-compensation=linear ! videoconvert ! autovideosink sync=true \
-        t. ! queue max-size-buffers=1 leaky=downstream ! videorate drop-only=true ! video/x-raw,framerate=5/1 ! videoscale ! video/x-raw,format=RGB,width=640,height=640 ! onnxinference model-location=/app/yolo11n.onnx ! onnxpostprocess conf-threshold=0.3 nms-threshold=0.45 draw-results=false filter-classes="0" ! onnxtracker tracker-algorithm=bytetrack ! onnxclassifier model-location="/app/ppe_efficientnet_lite0_best.onnx" labels="Helmet,Lamp,Mask,Shoes,Suit" threshold=0.34 ! ov.sink_meta
+        t. ! queue max-size-buffers=1 leaky=downstream ! videorate drop-only=true ! video/x-raw,framerate=25/3 ! videoscale ! video/x-raw,format=RGB,width=640,height=640 ! onnxinference model-location=/app/yolo11n.onnx ! onnxpostprocess conf-threshold=0.3 nms-threshold=0.45 draw-results=false filter-classes="0" ! onnxtracker tracker-algorithm=bytetrack ! onnxclassifier model-location="/app/ppe_efficientnet_lite0_best.onnx" labels="Helmet,Lamp,Mask,Shoes,Suit" threshold=0.34 ! ov.sink_meta
 fi
