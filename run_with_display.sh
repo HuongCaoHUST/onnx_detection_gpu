@@ -58,8 +58,8 @@ if [ -n "$DURATION" ]; then
     echo "Running for $DURATION seconds..."
     timeout $DURATION /usr/bin/gst-launch-1.0 -v \
         filesrc location=/app/test_video.mp4 ! decodebin ! videoconvert ! videorate ! video/x-raw,framerate=25/1 ! tee name=t \
-        t. ! queue max-size-buffers=20 ! onnxoverlay name=ov motion-compensation=false ! videoconvert ! video/x-raw,format=I420 ! x264enc tune=zerolatency ! matroskamux ! filesink location=output_3.mkv sync=true \
-        t. ! queue max-size-buffers=20 leaky=no ! videorate drop-only=true ! video/x-raw,framerate=25/2 ! videoscale ! video/x-raw,format=RGB,width=640,height=640 ! onnxinference model-location=/app/yolo11n.onnx ! onnxpostprocess draw-results=false ! onnxtracker tracker-algorithm=sort ! onnxclassifier model-location="$CLASSIFIER_MODEL_1" labels="Helmet,Lamp,Mask,Shoes,Suit" threshold=0.34 ! ov.sink_meta
+        t. ! queue name=display_q max-size-buffers=20 ! onnxoverlay name=ov motion-compensation=false ! videoconvert ! video/x-raw,format=I420 ! x264enc tune=zerolatency ! matroskamux ! filesink location=output_3.mkv sync=true \
+        t. ! queue name=infer_q max-size-buffers=20 leaky=no ! videorate drop-only=true ! video/x-raw,framerate=25/2 ! videoscale ! video/x-raw,format=RGB,width=640,height=640 ! onnxinference model-location=/app/yolo11n.onnx ! onnxpostprocess draw-results=false ! onnxtracker tracker-algorithm=sort ! onnxclassifier model-location="$CLASSIFIER_MODEL_1" labels="Helmet,Lamp,Mask,Shoes,Suit" threshold=0.34 ! ov.sink_meta
 else
     # Run indefinitely from Webcam
     echo "Running indefinitely using Webcam (close window to stop)..."
@@ -67,6 +67,6 @@ else
     echo ""
     timeout 200 /usr/bin/gst-launch-1.0 -v \
         filesrc location="/app/coal_test_video.mp4" ! decodebin ! videoconvert ! videorate ! video/x-raw,framerate=25/1 ! tee name=t \
-        t. ! queue max-size-buffers=20 ! onnxoverlay name=ov motion-compensation=linear ! videoconvert ! autovideosink sync=true \
-        t. ! queue max-size-buffers=1 leaky=downstream ! videorate drop-only=true ! video/x-raw,framerate=25/3 ! videoscale ! video/x-raw,format=RGB,width=640,height=640 ! onnxinference model-location=/app/yolo11n.onnx ! onnxpostprocess conf-threshold=0.3 nms-threshold=0.45 draw-results=false filter-classes="0" ! onnxtracker tracker-algorithm=bytetrack ! onnxclassifier model-location="/app/ppe_efficientnet_lite0_best.onnx" labels="Helmet,Lamp,Mask,Shoes,Suit" threshold=0.34 ! ov.sink_meta
+        t. ! queue name=display_q max-size-buffers=20 ! onnxoverlay name=ov motion-compensation=linear ! videoconvert ! autovideosink sync=true\
+        t. ! queue name=infer_q max-size-buffers=1 leaky=downstream ! videorate drop-only=true ! video/x-raw,framerate=25/3 ! videoscale ! video/x-raw,format=RGB,width=640,height=640 ! onnxinference model-location=/app/yolo11n.onnx ! onnxpostprocess conf-threshold=0.3 nms-threshold=0.45 draw-results=false filter-classes="0" ! onnxtracker tracker-algorithm=bytetrack ! onnxclassifier model-location="/app/ppe_efficientnet_lite0_best.onnx" labels="Helmet,Lamp,Mask,Shoes,Suit" threshold=0.34 ! ov.sink_meta
 fi

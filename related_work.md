@@ -1,0 +1,21 @@
+## Related Work
+
+Recent studies on personal protective equipment (PPE) monitoring can be broadly grouped into two directions. The first direction exploits human body structure to reason about the spatial relationship between workers and detected PPE items. In this type of approach, a pose estimator is first used to obtain body keypoints such as the head, shoulders, hips, hands, or ankles. A separate detector is then applied to localize PPE objects such as helmets, reflective vests, shoes, or gloves. Safety compliance is determined by geometric rules, for example, whether the helmet bounding box is close to the head keypoints, whether the vest overlaps the upper-body region, or whether shoes are located near the ankle keypoints. Sandru et al. showed that pose information can also support PPE recognition by using the supervision signal from a pose estimator to train a spatial attention module for the classifier [1]. Earlier rule-based safety systems, such as helmet-wearing detection based on the head region and image features, also demonstrate the interpretability of body-location-based reasoning [2]. However, relative-distance rules are sensitive to camera viewpoint, keypoint errors, occlusion, and pose variation. In addition, combining pose estimation with PPE detection increases the complexity of a real-time deployment pipeline.
+
+The second direction formulates PPE detection as a multi-label recognition problem, where multiple protective items may appear on the same worker. Instead of treating each PPE class independently, recent multi-label methods attempt to learn relationships among labels. Chen et al. proposed ML-GCN, which models object labels with a graph convolutional network to exploit semantic dependencies and label co-occurrence [3]. SSGRL further extends this idea by learning label-specific representations and propagating information through a semantic relation graph [4]. This direction is relevant to PPE monitoring because safety status is usually determined by a combination of items, such as helmets, lamps, shoes, and protective clothing, rather than by a single object. Nevertheless, label-relation models are mainly designed to improve static-image classification accuracy, and they do not fully address person-level assignment, temporal tracking, or false alarms caused by noisy frame-level predictions in video.
+
+Different from the above directions, the proposed system adopts a worker-centric real-time pipeline. YOLO is first used to detect workers in each frame, benefiting from its single-stage design for real-time object detection [5]. Each detected worker is then assigned a track ID, and the corresponding person region is passed to an EfficientNet-based multi-label classifier to identify missing PPE items [6]. Instead of relying on a single-frame prediction, the system maintains state for each `track_id` and reports a violation only when an item is missing for multiple consecutive frames. At the visualization stage, the GStreamer pipeline receives metadata from the inference branch, overlays SAFE/UNSAFE status on the original video, and saves evidence images only when a severe violation, such as missing helmet, is confirmed over time. This design combines person detection, multi-label PPE classification, and object tracking, while adding temporal rules to reduce false alarms in practical deployment conditions.
+
+## References
+
+[1] A. Sandru, G.-E. Duta, M.-I. Georgescu, and R. T. Ionescu, "SuPEr-SAM: Using the Supervision Signal from a Pose Estimator to Train a Spatial Attention Module for Personal Protective Equipment Recognition," arXiv:2009.12339, 2020.
+
+[2] K. Li, X. Zhao, J. Bian, and M. Tan, "Automatic Safety Helmet Wearing Detection," arXiv:1802.00264, 2018.
+
+[3] Z.-M. Chen, X.-S. Wei, P. Wang, and Y. Guo, "Multi-Label Image Recognition with Graph Convolutional Networks," CVPR, 2019.
+
+[4] T. Chen, M. Xu, X. Hui, H. Wu, and L. Lin, "Learning Semantic-Specific Graph Representation for Multi-Label Image Recognition," ICCV, 2019.
+
+[5] J. Redmon, S. Divvala, R. Girshick, and A. Farhadi, "You Only Look Once: Unified, Real-Time Object Detection," CVPR, 2016.
+
+[6] M. Tan and Q. V. Le, "EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks," ICML, 2019.

@@ -7,6 +7,10 @@ services:
     cpus: 2.0
     environment:
       - DISPLAY=$DISPLAY
+      - GST_TRACERS=stats;rusage;latency
+      - GST_DEBUG=GST_TRACER:7
+      - GST_DEBUG_NO_COLOR=1
+      - GST_DEBUG_FILE=/app/host_data/gst_trace.log
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ./:/app/host_data  # To save outputs if needed

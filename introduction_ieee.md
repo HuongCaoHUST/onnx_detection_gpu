@@ -1,0 +1,19 @@
+# I. Introduction
+
+Personal protective equipment (PPE) is essential for reducing occupational risks in underground mining environments, where workers are frequently exposed to poor illumination, dust, moving equipment, and other hazardous conditions. In this context, the target safety equipment includes safety helmets, cap lamps, face masks, reflective vests, and safety boots, which are required before workers enter mining areas. However, PPE compliance is still commonly inspected manually or through conventional surveillance, which is labor-intensive, discontinuous, and prone to human error. These limitations become more significant in crowded video scenes, low-light conditions, under occlusion, or when safety items are small and difficult to observe. Therefore, an automatic video-based PPE monitoring system is needed for continuous and real-time safety supervision in mining scenarios.
+
+Recent approaches have improved PPE recognition using deep learning, but several limitations remain. Pose-based methods estimate body keypoints, detect PPE objects, and apply geometric rules to check whether each item is located near the corresponding body region. Although interpretable, such rules are sensitive to keypoint errors, viewpoint changes, occlusion, and pose variation. Other methods formulate PPE monitoring as multi-label recognition and learn relationships among safety-equipment classes, but they are often designed for static images and do not fully address person-level assignment, temporal consistency, or false alarms in real-time video streams.
+
+To address these challenges, this paper proposes a worker-centric real-time PPE monitoring pipeline for mining workers. Instead of detecting PPE items independently and then manually associating them with workers, the proposed system first detects workers using a YOLO-based detector. Each worker is assigned a persistent identity through an online tracking module. The corresponding worker region is then cropped and passed to a multi-label classifier based on EfficientNet to identify missing safety helmets, cap lamps, face masks, reflective vests, and safety boots. The system maintains temporal states for each tracked worker and reports a violation only when the missing item is observed consistently across consecutive frames. This temporal confirmation mechanism reduces false alarms caused by transient misclassification, motion blur, and short-term occlusion.
+
+The proposed system is implemented as a modular GStreamer pipeline integrated with ONNX Runtime. The original video branch is preserved for display or recording, while a reduced-resolution inference branch performs detection, tracking, classification, and metadata generation. The metadata is then merged back into the original stream for overlay visualization. Severe violations, such as missing helmets, are confirmed over multiple frames before evidence images are saved.
+
+The main contributions of this work are summarized as follows:
+
+1. A worker-centric PPE monitoring pipeline that combines person detection, tracking, and multi-label PPE classification for real-time video analysis.
+
+2. A temporal decision mechanism that maintains PPE states for each tracked worker and reports violations only after consecutive-frame confirmation, reducing false alarms from noisy frame-level predictions.
+
+3. A modular GStreamer and ONNX Runtime implementation that overlays PPE metadata on the original video stream and saves evidence only after severe violations are temporally confirmed.
+
+The remainder of this paper is organized as follows. Section II reviews related work on PPE monitoring, pose-based safety reasoning, and multi-label recognition. Section III describes the proposed pipeline and its main modules. Section IV presents the experimental setup and evaluation results. Section V concludes the paper and discusses future work.
