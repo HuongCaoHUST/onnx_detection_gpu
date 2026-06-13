@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y \
     wget \
     curl \
     pkg-config \
+    libeigen3-dev \
     libopencv-dev \
     sudo \
     && rm -rf /var/lib/apt/lists/*
@@ -55,6 +56,10 @@ WORKDIR /app
 
 # Copy GStreamer plugin source and build it
 COPY gst-template /app/gst-template
+RUN mkdir -p /app/gst-template/gst-plugin/third_party && \
+    if [ ! -e /app/gst-template/gst-plugin/third_party/eigen ]; then \
+        ln -s /usr/include/eigen3 /app/gst-template/gst-plugin/third_party/eigen; \
+    fi
 RUN cd /app/gst-template && \
     rm -rf builddir && \
     meson setup builddir && \
@@ -62,6 +67,7 @@ RUN cd /app/gst-template && \
 
 # Copy scripts, models, and videos
 COPY run_with_display.sh /app/
+COPY run_with_display_rpi.sh /app/
 COPY yolo11n.onnx /app/
 COPY best_3.onnx /app/
 COPY ppe_vit_small.onnx /app/
@@ -71,6 +77,6 @@ COPY ppe_efficientnet_lite0_best.onnx.data /app/
 COPY test_video.mp4 /app/
 COPY coal_test_video.mp4 /app/
 
-RUN chmod +x /app/run_with_display.sh
+RUN chmod +x /app/run_with_display.sh /app/run_with_display_rpi.sh
 
 CMD ["/bin/bash", "-c", "./run_with_display.sh"]

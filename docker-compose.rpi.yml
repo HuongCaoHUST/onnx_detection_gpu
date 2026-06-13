@@ -9,14 +9,23 @@ services:
     environment:
       - DISPLAY=${DISPLAY:-:0}
       - ORT_DISABLE_CUDA=1
-      - GST_DEBUG=${GST_DEBUG:-1}
+      - GST_DEBUG=${GST_DEBUG:-0}
       - OMP_NUM_THREADS=1
       - OPENBLAS_NUM_THREADS=1
       - MKL_NUM_THREADS=1
       - OPENCV_FOR_THREADS_NUM=1
+      - DISPLAY_FPS=${DISPLAY_FPS:-15}
+      - INFER_FPS_NUM=${INFER_FPS_NUM:-3}
+      - INFER_FPS_DEN=${INFER_FPS_DEN:-1}
+      - ENABLE_CLASSIFIER=${ENABLE_CLASSIFIER:-0}
+      - USE_TRACKER=${USE_TRACKER:-1}
+      - VIDEO_SINK=${VIDEO_SINK:-kmssink}
+      - PRINT_CONFIG=${PRINT_CONFIG:-0}
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ./:/app/host_data
+    devices:
+      - /dev/dri:/dev/dri
     network_mode: host
     shm_size: 512m
-    command: /bin/bash -c "./run_with_display.sh"
+    command: /bin/bash /app/host_data/run_with_display_rpi.sh
