@@ -42,6 +42,24 @@ After testing, start the desktop again if needed:
 sudo systemctl start display-manager
 ```
 
+## Use your own video
+
+Copy your video into the host `videos` directory. The compose file mounts it
+into the container as `/videos`.
+
+```bash
+mkdir -p videos
+cp /path/to/your-video.mp4 videos/input.mp4
+docker compose -f docker-compose.rpi.yml up
+```
+
+To use another filename, set `VIDEO_PATH` to the container path:
+
+```bash
+cp /path/to/demo.mp4 videos/demo.mp4
+VIDEO_PATH=/videos/demo.mp4 docker compose -f docker-compose.rpi.yml up
+```
+
 The Pi compose file uses `run_with_display_rpi.sh`, which caps display FPS,
 runs YOLO inference at a lower rate, drops stale frames, and disables the PPE
 classifier by default.

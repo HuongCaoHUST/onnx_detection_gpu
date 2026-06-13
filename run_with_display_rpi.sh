@@ -29,7 +29,10 @@ fi
 
 rm -rf ~/.cache/gstreamer-*
 
-VIDEO_PATH="${VIDEO_PATH:-/app/coal_test_video.mp4}"
+VIDEO_PATH="${VIDEO_PATH:-/videos/input.mp4}"
+if [ ! -f "$VIDEO_PATH" ]; then
+    VIDEO_PATH="/app/coal_test_video.mp4"
+fi
 MODEL_PATH="${MODEL_PATH:-/app/yolo11n.onnx}"
 CLASSIFIER_MODEL="${CLASSIFIER_MODEL:-/app/ppe_efficientnet_lite0_best.onnx}"
 DISPLAY_FPS="${DISPLAY_FPS:-15}"

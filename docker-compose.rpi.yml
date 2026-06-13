@@ -14,6 +14,7 @@ services:
       - OPENBLAS_NUM_THREADS=1
       - MKL_NUM_THREADS=1
       - OPENCV_FOR_THREADS_NUM=1
+      - VIDEO_PATH=${VIDEO_PATH:-/videos/input.mp4}
       - DISPLAY_FPS=${DISPLAY_FPS:-15}
       - INFER_FPS_NUM=${INFER_FPS_NUM:-3}
       - INFER_FPS_DEN=${INFER_FPS_DEN:-1}
@@ -25,6 +26,7 @@ services:
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ./:/app/host_data
+      - ./videos:/videos:ro
     devices:
       - /dev/dri:/dev/dri
     network_mode: host
