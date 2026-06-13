@@ -70,6 +70,9 @@ Useful runtime knobs:
 # Faster, less accurate metadata updates
 INFER_FPS_NUM=2 docker compose -f docker-compose.rpi.yml up
 
+# More responsive boxes if the Pi CPU can keep up
+INFER_FPS_NUM=4 docker compose -f docker-compose.rpi.yml up
+
 # Re-enable PPE classifier if the Pi can keep up
 ENABLE_CLASSIFIER=1 docker compose -f docker-compose.rpi.yml up
 

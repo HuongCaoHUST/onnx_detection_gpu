@@ -206,9 +206,14 @@ gst_onnxoverlay_sink_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
   // Check if there's a metadata buffer in queue (non-blocking)
   {
     std::lock_guard<std::mutex> lock(*filter->meta_queue_lock);
-    if (!filter->meta_queue->empty()) {
+    while (!filter->meta_queue->empty()) {
+      if (meta_buf)
+        gst_buffer_unref (meta_buf);
       meta_buf = filter->meta_queue->front();
       filter->meta_queue->pop();
+    }
+
+    if (meta_buf) {
 
       if (filter->last_meta_buf)
         gst_buffer_unref (filter->last_meta_buf);
@@ -439,17 +444,16 @@ gst_onnxoverlay_sink_meta_chain (GstPad * pad, GstObject * parent, GstBuffer * b
 {
   Gstonnxoverlay *filter = GST_ONNXOVERLAY (parent);
 
-  // Just queue the metadata buffer, don't block
+  // Keep only the newest metadata buffer. Old metadata makes boxes lag behind
+  // the live display branch on small CPUs such as Raspberry Pi.
   {
     std::lock_guard<std::mutex> lock(*filter->meta_queue_lock);
-    filter->meta_queue->push (gst_buffer_ref (buf));
-
-    // Keep queue size small (max 5)
-    while (filter->meta_queue->size() > 5) {
+    while (!filter->meta_queue->empty()) {
       GstBuffer *old = filter->meta_queue->front();
       filter->meta_queue->pop();
       gst_buffer_unref (old);
     }
+    filter->meta_queue->push (gst_buffer_ref (buf));
   }
 
   gst_buffer_unref (buf);
