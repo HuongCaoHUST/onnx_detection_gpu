@@ -37,6 +37,7 @@ INFER_FPS_NUM="${INFER_FPS_NUM:-3}"
 INFER_FPS_DEN="${INFER_FPS_DEN:-1}"
 ENABLE_CLASSIFIER="${ENABLE_CLASSIFIER:-0}"
 USE_TRACKER="${USE_TRACKER:-1}"
+MOTION_COMPENSATION="${MOTION_COMPENSATION:-linear}"
 PRINT_CONFIG="${PRINT_CONFIG:-0}"
 
 if [ "$PRINT_CONFIG" = "1" ]; then
@@ -47,6 +48,7 @@ if [ "$PRINT_CONFIG" = "1" ]; then
     echo "  Inference FPS cap: ${INFER_FPS_NUM}/${INFER_FPS_DEN}"
     echo "  Tracker: $USE_TRACKER"
     echo "  Classifier: $ENABLE_CLASSIFIER"
+    echo "  Motion compensation: $MOTION_COMPENSATION"
     echo "  Sink: $VIDEO_SINK"
     echo ""
 fi
@@ -63,5 +65,5 @@ fi
 
 eval /usr/bin/gst-launch-1.0 -q \
     filesrc location="\"$VIDEO_PATH\"" ! decodebin ! videoconvert ! videorate ! video/x-raw,framerate=${DISPLAY_FPS}/1 ! tee name=t \
-    t. ! queue name=display_q max-size-buffers=2 leaky=downstream ! onnxoverlay name=ov motion-compensation=false ! videoconvert ! fpsdisplaysink video-sink="\"$VIDEO_SINK\"" text-overlay=false sync=false silent=true \
+    t. ! queue name=display_q max-size-buffers=2 leaky=downstream ! onnxoverlay name=ov motion-compensation=${MOTION_COMPENSATION} ! videoconvert ! fpsdisplaysink video-sink="\"$VIDEO_SINK\"" text-overlay=false sync=false silent=true \
     t. ! queue name=infer_q max-size-buffers=1 leaky=downstream ! videorate drop-only=true ! video/x-raw,framerate=${INFER_FPS_NUM}/${INFER_FPS_DEN} ! videoscale ! video/x-raw,format=RGB,width=640,height=640 ! onnxinference model-location="\"$MODEL_PATH\"" ! $META_CHAIN ! ov.sink_meta

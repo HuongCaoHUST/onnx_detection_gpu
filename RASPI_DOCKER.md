@@ -60,6 +60,9 @@ VIDEO_SINK=autovideosink docker compose -f docker-compose.rpi.yml up
 
 # Print pipeline config once at startup
 PRINT_CONFIG=1 docker compose -f docker-compose.rpi.yml up
+
+# Disable overlay motion compensation if the Pi cannot keep up
+MOTION_COMPENSATION=false docker compose -f docker-compose.rpi.yml up
 ```
 
 ## Notes
