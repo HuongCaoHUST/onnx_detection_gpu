@@ -1,0 +1,22 @@
+services:
+  onnx_pipeline:
+    platform: linux/arm64
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: onnx_detection_gpu-onnx_pipeline:rpi
+    container_name: onnx_pipeline_rpi
+    environment:
+      - DISPLAY=${DISPLAY:-:0}
+      - ORT_DISABLE_CUDA=1
+      - GST_DEBUG=${GST_DEBUG:-1}
+      - OMP_NUM_THREADS=1
+      - OPENBLAS_NUM_THREADS=1
+      - MKL_NUM_THREADS=1
+      - OPENCV_FOR_THREADS_NUM=1
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ./:/app/host_data
+    network_mode: host
+    shm_size: 512m
+    command: /bin/bash -c "./run_with_display.sh"
