@@ -23,6 +23,7 @@ enum
 {
   PROP_0,
   PROP_USE_MOTION_COMPENSATION,
+  PROP_DRAW_LABELS,
 };
 
 
@@ -102,6 +103,12 @@ gst_onnxoverlay_class_init (GstonnxoverlayClass * klass)
           GST_ONNXOVERLAY_MC_FORWARD,
           (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
+  g_object_class_install_property (gobject_class, PROP_DRAW_LABELS,
+      g_param_spec_boolean ("draw-labels", "Draw Labels",
+          "Draw class labels and track ids next to bounding boxes",
+          TRUE,
+          (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
   gstelement_class->request_new_pad = gst_onnxoverlay_request_new_pad;
 
   GST_DEBUG_CATEGORY_INIT (gst_onnxoverlay_debug, "onnxoverlay", 0, "ONNX Overlay");
@@ -129,6 +136,7 @@ gst_onnxoverlay_init (Gstonnxoverlay * filter)
   filter->stop_thread = FALSE;
   filter->last_meta_buf = NULL;
   filter->mc_method = GST_ONNXOVERLAY_MC_FORWARD;
+  filter->draw_labels = TRUE;
   filter->track_states = new std::map<int, TrackVelocityState>();
 }
 
@@ -173,6 +181,9 @@ gst_onnxoverlay_set_property (GObject * object, guint prop_id,
     case PROP_USE_MOTION_COMPENSATION:
       filter->mc_method = (GstOnnxOverlayMCMethod) g_value_get_enum (value);
       break;
+    case PROP_DRAW_LABELS:
+      filter->draw_labels = g_value_get_boolean (value);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -188,6 +199,9 @@ gst_onnxoverlay_get_property (GObject * object, guint prop_id,
   switch (prop_id) {
     case PROP_USE_MOTION_COMPENSATION:
       g_value_set_enum (value, filter->mc_method);
+      break;
+    case PROP_DRAW_LABELS:
+      g_value_set_boolean (value, filter->draw_labels);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -412,7 +426,7 @@ gst_onnxoverlay_sink_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
               }
 
               cv::rectangle(img, cv::Rect(x, y, w, h), color, 2);
-              if (ometa->label) {
+              if (filter->draw_labels && ometa->label) {
                 std::string display_label = ometa->label;
                 GST_DEBUG_OBJECT (filter, "Drawing label %s with track_id %d", ometa->label, ometa->track_id);
                 if (ometa->track_id >= 0) {

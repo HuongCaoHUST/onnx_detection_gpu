@@ -232,8 +232,14 @@ gst_onnxclassifier_start (GstBaseTransform * base)
   try {
     filter->env = new Ort::Env(ORT_LOGGING_LEVEL_WARNING, "Classifier");
     Ort::SessionOptions session_options;
-    session_options.SetIntraOpNumThreads(1);
-    session_options.SetInterOpNumThreads(1);
+    int intra_threads = 1;
+    int inter_threads = 1;
+    const char* intra_env = getenv("ORT_INTRA_THREADS");
+    const char* inter_env = getenv("ORT_INTER_THREADS");
+    if (intra_env && atoi(intra_env) > 0) intra_threads = atoi(intra_env);
+    if (inter_env && atoi(inter_env) > 0) inter_threads = atoi(inter_env);
+    session_options.SetIntraOpNumThreads(intra_threads);
+    session_options.SetInterOpNumThreads(inter_threads);
     session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
     
     // Enable CUDA provider if available, otherwise fallback to CPU

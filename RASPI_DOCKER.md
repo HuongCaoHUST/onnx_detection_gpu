@@ -73,6 +73,18 @@ INFER_FPS_NUM=2 docker compose -f docker-compose.rpi.yml up
 # More responsive boxes if the Pi CPU can keep up
 INFER_FPS_NUM=4 docker compose -f docker-compose.rpi.yml up
 
+# Try more ONNX CPU threads. 2 is the default for Pi.
+ORT_INTRA_THREADS=3 docker compose -f docker-compose.rpi.yml up
+
+# Draw labels again. Disabled by default for speed.
+DRAW_LABELS=true docker compose -f docker-compose.rpi.yml up
+
+# Fewer boxes and less post-processing work
+CONF_THRESHOLD=0.55 docker compose -f docker-compose.rpi.yml up
+
+# Detect only people again. Empty FILTER_CLASSES means all COCO classes.
+FILTER_CLASSES=0 docker compose -f docker-compose.rpi.yml up
+
 # Re-enable PPE classifier if the Pi can keep up
 ENABLE_CLASSIFIER=1 docker compose -f docker-compose.rpi.yml up
 

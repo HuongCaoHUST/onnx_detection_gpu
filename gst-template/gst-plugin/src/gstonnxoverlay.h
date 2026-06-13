@@ -56,6 +56,7 @@ struct _Gstonnxoverlay {
   GstBuffer *last_meta_buf;
   
   GstOnnxOverlayMCMethod mc_method;
+  gboolean draw_labels;
   std::map<int, TrackVelocityState> *track_states;
 };
 
