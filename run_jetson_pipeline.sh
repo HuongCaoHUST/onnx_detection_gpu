@@ -47,7 +47,7 @@ COMMON=(
 )
 INFERENCE=(
   t. ! queue max-size-buffers=1 leaky=downstream ! videorate drop-only=true !
-  "video/x-raw,framerate=${INFER_FPS}/1" ! videoscale !
+  "video/x-raw,framerate=${INFER_FPS}/1" ! videoconvert ! videoscale !
   "video/x-raw,format=RGB,width=640,height=640" !
   onnxinference "model-location=$MODEL" "engine-cache=$ENGINE" !
   onnxpostprocess draw-results=false "original-width=$WIDTH" "original-height=$HEIGHT" !
