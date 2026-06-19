@@ -59,11 +59,11 @@ if [[ "$OUTPUT" == "display" ]]; then
   if gst-inspect-1.0 nvvidconv >/dev/null 2>&1 && gst-inspect-1.0 nvoverlaysink >/dev/null 2>&1; then
     gst-launch-1.0 -e "${COMMON[@]}" ! 'video/x-raw,format=I420' ! \
       nvvidconv ! 'video/x-raw(memory:NVMM),format=NV12' ! \
-      nvoverlaysink sync=false \
+      nvoverlaysink sync=true \
       "${INFERENCE[@]}"
   else
     echo "nvoverlaysink unavailable; falling back to X11 auto video sink" >&2
-    gst-launch-1.0 -e "${COMMON[@]}" ! autovideosink sync=false \
+    gst-launch-1.0 -e "${COMMON[@]}" ! autovideosink sync=true \
       "${INFERENCE[@]}"
   fi
 elif [[ -n "$OUTPUT" ]]; then
