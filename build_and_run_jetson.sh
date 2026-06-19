@@ -85,5 +85,4 @@ docker run --rm --runtime nvidia \
   "${OPENCV_MOUNTS[@]}" \
   "${DISPLAY_MOUNTS[@]}" \
   -v "$PWD:/workspace" \
-  --entrypoint /workspace/run_jetson_pipeline.sh \
   "$IMAGE" "$@"
