@@ -62,9 +62,25 @@ if [[ -d /tmp/.X11-unix ]]; then
   DISPLAY_MOUNTS+=( -v /tmp/.X11-unix:/tmp/.X11-unix:rw )
 fi
 
+DISPLAY_VALUE=${DISPLAY:-:0}
+XAUTHORITY_HOST=${XAUTHORITY:-}
+if [[ ! -f "$XAUTHORITY_HOST" ]] && [[ -n "${SUDO_USER:-}" ]] && [[ "$SUDO_USER" != "root" ]]; then
+  SUDO_USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+  XAUTHORITY_HOST="$SUDO_USER_HOME/.Xauthority"
+fi
+XAUTHORITY_ARGS=()
+if [[ -f "$XAUTHORITY_HOST" ]]; then
+  DISPLAY_MOUNTS+=( -v "$XAUTHORITY_HOST:/tmp/.Xauthority:ro" )
+  XAUTHORITY_ARGS+=( -e XAUTHORITY=/tmp/.Xauthority )
+else
+  echo "Warning: Xauthority file not found; HDMI display may require: xhost +local:root" >&2
+fi
+
 docker run --rm --runtime nvidia \
   --ipc=host \
-  -e "DISPLAY=${DISPLAY:-:0}" \
+  --network host \
+  -e "DISPLAY=$DISPLAY_VALUE" \
+  "${XAUTHORITY_ARGS[@]}" \
   -e VIDEO_WIDTH -e VIDEO_HEIGHT -e VIDEO_FPS -e INFER_FPS -e ENGINE_CACHE \
   "${OPENCV_MOUNTS[@]}" \
   "${DISPLAY_MOUNTS[@]}" \
