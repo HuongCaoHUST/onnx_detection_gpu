@@ -37,7 +37,7 @@ if [[ ! -f "$BUILD_DIR/build.ninja" ]]; then
     -Dinference_backend=tensorrt
 else
   meson configure "$BUILD_DIR" \
-    --buildtype=release \
+    -Dbuildtype=release \
     -Dinference_backend=tensorrt
 fi
 ninja -C "$BUILD_DIR"
