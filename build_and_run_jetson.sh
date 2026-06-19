@@ -62,4 +62,5 @@ docker run --rm --runtime nvidia \
   -e VIDEO_WIDTH -e VIDEO_HEIGHT -e VIDEO_FPS -e INFER_FPS -e ENGINE_CACHE \
   "${OPENCV_MOUNTS[@]}" \
   -v "$PWD:/workspace" \
+  --entrypoint /workspace/run_jetson_pipeline.sh \
   "$IMAGE" "$@"
