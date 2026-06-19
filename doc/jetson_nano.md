@@ -51,6 +51,8 @@ Script compile plugin trên Jetson host rồi mount thư mục build vào contai
 Inference, GStreamer pipeline và ghi output vẫn chạy hoàn toàn trong container.
 Lý do là `l4t-base` nhận CUDA/TensorRT qua `--runtime nvidia` ở lúc chạy, không có
 repository chứa NVIDIA development package trong bước `docker build`.
+Script cũng mount các file `libopencv_*.so.4.1` của JetPack host vì Ubuntu Bionic
+trong image chỉ cung cấp OpenCV 3.2, không ABI-compatible với plugin đã compile.
 
 Pipeline detection:
 

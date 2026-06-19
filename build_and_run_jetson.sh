@@ -44,8 +44,22 @@ ninja -C "$BUILD_DIR"
 
 docker build -f Dockerfile.jetson -t "$IMAGE" .
 
+OPENCV_MOUNTS=()
+shopt -s nullglob
+for soname in /usr/lib/aarch64-linux-gnu/libopencv_*.so.4.1; do
+  real_library=$(readlink -f "$soname")
+  OPENCV_MOUNTS+=( -v "$real_library:$soname:ro" )
+done
+shopt -u nullglob
+if [[ ${#OPENCV_MOUNTS[@]} -eq 0 ]]; then
+  echo "Cannot find JetPack OpenCV 4.1 libraries on the host." >&2
+  echo "Expected: /usr/lib/aarch64-linux-gnu/libopencv_*.so.4.1" >&2
+  exit 2
+fi
+
 docker run --rm --runtime nvidia \
   --ipc=host \
   -e VIDEO_WIDTH -e VIDEO_HEIGHT -e VIDEO_FPS -e INFER_FPS -e ENGINE_CACHE \
+  "${OPENCV_MOUNTS[@]}" \
   -v "$PWD:/workspace" \
   "$IMAGE" "$@"
