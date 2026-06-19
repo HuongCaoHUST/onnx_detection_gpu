@@ -35,7 +35,7 @@ container lấy DRM master:
 ```bash
 sudo systemctl stop display-manager
 cp .env.example .env
-docker compose up --build
+docker-compose up --build
 ```
 
 Pipeline dùng `nvdrmvideosink`, mount `/dev/dri` và render thẳng ra HDMI. Chỉnh
@@ -44,7 +44,7 @@ TensorRT ở lần chạy đầu và cache tại `gst-template/build-compose`. D
 `Ctrl+C`, hoặc:
 
 ```bash
-docker compose down
+docker-compose down
 ```
 
 Nếu màn hình đen do tự chọn sai connector/plane, lấy ID bằng `modetest -M tegra`

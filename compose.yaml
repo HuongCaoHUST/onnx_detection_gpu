@@ -1,3 +1,5 @@
+version: "2.4"
+
 services:
   detection-hdmi:
     image: onnx-detection-jetson:${IMAGE_TAG:-nano}
