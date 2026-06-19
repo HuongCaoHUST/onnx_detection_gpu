@@ -9,6 +9,9 @@ HEIGHT=${VIDEO_HEIGHT:-720}
 FPS=${VIDEO_FPS:-25}
 INFER_FPS=${INFER_FPS:-5}
 ENGINE=${ENGINE_CACHE:-${MODEL%.*}.nano.fp16.engine}
+DRM_SET_MODE=${DRM_SET_MODE:-true}
+DRM_CONN_ID=${DRM_CONN_ID:-}
+DRM_PLANE_ID=${DRM_PLANE_ID:-}
 
 if [[ ! -f "$INPUT" ]]; then
   echo "Input video does not exist: $INPUT" >&2
@@ -55,17 +58,25 @@ INFERENCE=(
 )
 
 if [[ "$OUTPUT" == "display" ]]; then
-  echo "Displaying annotated video on HDMI"
-  if gst-inspect-1.0 nvvidconv >/dev/null 2>&1 && gst-inspect-1.0 nvoverlaysink >/dev/null 2>&1; then
-    gst-launch-1.0 -e "${COMMON[@]}" ! 'video/x-raw,format=I420' ! \
-      nvvidconv ! 'video/x-raw(memory:NVMM),format=NV12' ! \
-      nvoverlaysink sync=false \
-      "${INFERENCE[@]}"
-  else
-    echo "nvoverlaysink unavailable; falling back to X11 auto video sink" >&2
-    gst-launch-1.0 -e "${COMMON[@]}" ! autovideosink sync=false \
-      "${INFERENCE[@]}"
+  if ! gst-inspect-1.0 nvvidconv >/dev/null 2>&1 ||
+     ! gst-inspect-1.0 nvdrmvideosink >/dev/null 2>&1; then
+    echo "Direct HDMI requires nvvidconv and nvdrmvideosink." >&2
+    exit 4
   fi
+  if [[ ! -e /dev/dri/card0 ]]; then
+    echo "DRM device /dev/dri/card0 is not visible in the container." >&2
+    exit 4
+  fi
+
+  DRM_SINK=(nvdrmvideosink "set-mode=$DRM_SET_MODE" sync=false)
+  [[ -n "$DRM_CONN_ID" ]] && DRM_SINK+=("conn-id=$DRM_CONN_ID")
+  [[ -n "$DRM_PLANE_ID" ]] && DRM_SINK+=("plane-id=$DRM_PLANE_ID")
+
+  echo "Displaying annotated video directly on HDMI through DRM (set-mode=$DRM_SET_MODE)"
+  gst-launch-1.0 -e "${COMMON[@]}" ! 'video/x-raw,format=I420' ! \
+    nvvidconv ! 'video/x-raw(memory:NVMM),format=NV12' ! \
+    "${DRM_SINK[@]}" \
+    "${INFERENCE[@]}"
 elif [[ -n "$OUTPUT" ]]; then
   if gst-inspect-1.0 nvvidconv >/dev/null 2>&1 && gst-inspect-1.0 nvv4l2h264enc >/dev/null 2>&1; then
     gst-launch-1.0 -e "${COMMON[@]}" ! 'video/x-raw,format=I420' ! \

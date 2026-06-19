@@ -1,0 +1,35 @@
+services:
+  detection-hdmi:
+    image: onnx-detection-jetson:${IMAGE_TAG:-nano}
+    build:
+      context: .
+      dockerfile: Dockerfile.jetson
+      args:
+        L4T_TAG: ${L4T_TAG:-r32.7.1}
+    runtime: nvidia
+    network_mode: host
+    ipc: host
+    devices:
+      - /dev/dri:/dev/dri
+    volumes:
+      - .:/workspace
+      # TensorRT/CUDA development files come from the matching JetPack host.
+      - /usr/lib/aarch64-linux-gnu:/opt/jetson-host-libs:ro
+      - /usr/include/aarch64-linux-gnu:/usr/include/aarch64-linux-gnu:ro
+      - /usr/local/cuda:/usr/local/cuda:ro
+    environment:
+      GST_PLUGIN_PATH: /workspace/gst-template/build-compose/gst-plugin
+      LD_LIBRARY_PATH: /opt/jetson-host-libs:/usr/local/cuda/lib64:/usr/lib/aarch64-linux-gnu/tegra
+      VIDEO_WIDTH: ${VIDEO_WIDTH:-1280}
+      VIDEO_HEIGHT: ${VIDEO_HEIGHT:-720}
+      VIDEO_FPS: ${VIDEO_FPS:-25}
+      INFER_FPS: ${INFER_FPS:-5}
+      ENGINE_CACHE: ${ENGINE_CACHE:-/workspace/yolo11n.nano.fp16.engine}
+      DRM_SET_MODE: ${DRM_SET_MODE:-true}
+      DRM_CONN_ID: ${DRM_CONN_ID:-}
+      DRM_PLANE_ID: ${DRM_PLANE_ID:-}
+    command:
+      - ${INPUT_VIDEO:-/workspace/test_video.mp4}
+      - ${MODEL_FILE:-/workspace/yolo11n.onnx}
+      - display
+    restart: "no"

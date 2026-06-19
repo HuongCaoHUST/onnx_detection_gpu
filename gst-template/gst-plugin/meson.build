@@ -27,8 +27,9 @@ if inference_backend == 'onnxruntime'
   onnxruntime_dep = declare_dependency(include_directories: ort_inc, dependencies: ort_lib)
 else
   cuda_dep = cc.find_library('cudart', dirs: ['/usr/local/cuda/lib64'], required: true)
-  nvinfer_dep = cc.find_library('nvinfer', required: true)
-  nvonnxparser_dep = cc.find_library('nvonnxparser', required: true)
+  jetson_host_lib_dirs = ['/opt/jetson-host-libs', '/usr/lib/aarch64-linux-gnu']
+  nvinfer_dep = cc.find_library('nvinfer', dirs: jetson_host_lib_dirs, required: true)
+  nvonnxparser_dep = cc.find_library('nvonnxparser', dirs: jetson_host_lib_dirs, required: true)
   tensorrt_inc = include_directories('/usr/include/aarch64-linux-gnu', '/usr/local/cuda/include')
   tensorrt_dep = declare_dependency(
     include_directories: tensorrt_inc,

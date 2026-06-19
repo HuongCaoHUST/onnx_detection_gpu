@@ -27,31 +27,28 @@ sudo apt-get install -y build-essential meson ninja-build pkg-config \
 test -f /usr/include/aarch64-linux-gnu/NvInfer.h -o -f /usr/include/NvInfer.h
 ```
 
-## Build và chạy
+## Chạy direct HDMI bằng Docker Compose
+
+Direct DRM không sử dụng X11/Wayland. Dừng GUI trên host trước khi chạy để
+container lấy DRM master:
 
 ```bash
-chmod +x build_and_run_jetson.sh run_jetson_pipeline.sh
-./build_and_run_jetson.sh \
-  /workspace/test_video.mp4 \
-  /workspace/yolo11n.onnx \
-  /workspace/output_jetson.mkv
+sudo systemctl stop display-manager
+cp .env.example .env
+docker compose up --build
 ```
 
-Hiển thị detection trực tiếp lên màn hình HDMI thay vì ghi file:
+Pipeline dùng `nvdrmvideosink`, mount `/dev/dri` và render thẳng ra HDMI. Chỉnh
+video, model, độ phân giải và FPS trong `.env`. Compose tự compile plugin
+TensorRT ở lần chạy đầu và cache tại `gst-template/build-compose`. Dừng bằng
+`Ctrl+C`, hoặc:
 
 ```bash
-./build_and_run_jetson.sh \
-  /workspace/test_video.mp4 \
-  /workspace/yolo11n.onnx \
-  display
+docker compose down
 ```
 
-Chế độ này ưu tiên `nvoverlaysink` với NVMM để xuất hình bằng phần cứng Jetson.
-Nếu phải fallback sang X11 và bị lỗi quyền display, chạy một lần trên host:
-
-```bash
-xhost +local:root
-```
+Nếu màn hình đen do tự chọn sai connector/plane, lấy ID bằng `modetest -M tegra`
+rồi đặt `DRM_CONN_ID` và `DRM_PLANE_ID` trong `.env`.
 
 Nếu host là JetPack/L4T 32.7.4, có thể chọn base tag cùng phiên bản:
 
