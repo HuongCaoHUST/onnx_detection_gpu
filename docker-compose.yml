@@ -28,8 +28,8 @@ services:
       INFER_FPS: ${INFER_FPS:-5}
       ENGINE_CACHE: ${ENGINE_CACHE:-/workspace/yolo11n.nano.fp16.engine}
       DRM_SET_MODE: ${DRM_SET_MODE:-true}
-      DRM_CONN_ID: ${DRM_CONN_ID:-}
-      DRM_PLANE_ID: ${DRM_PLANE_ID:-}
+      DRM_CONN_ID: ${DRM_CONN_ID}
+      DRM_PLANE_ID: ${DRM_PLANE_ID}
     command:
       - ${INPUT_VIDEO:-/workspace/test_video.mp4}
       - ${MODEL_FILE:-/workspace/yolo11n.onnx}
