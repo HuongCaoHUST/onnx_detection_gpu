@@ -45,8 +45,9 @@ INFERENCE=(
 )
 
 if [[ -n "$OUTPUT" ]]; then
-  if gst-inspect-1.0 nvv4l2h264enc >/dev/null 2>&1; then
+  if gst-inspect-1.0 nvvidconv >/dev/null 2>&1 && gst-inspect-1.0 nvv4l2h264enc >/dev/null 2>&1; then
     gst-launch-1.0 -e "${COMMON[@]}" ! 'video/x-raw,format=I420' ! \
+      nvvidconv ! 'video/x-raw(memory:NVMM),format=NV12' ! \
       nvv4l2h264enc bitrate=4000000 ! h264parse ! matroskamux ! filesink "location=$OUTPUT" \
       "${INFERENCE[@]}"
   else
