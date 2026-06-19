@@ -57,10 +57,17 @@ if [[ ${#OPENCV_MOUNTS[@]} -eq 0 ]]; then
   exit 2
 fi
 
+DISPLAY_MOUNTS=()
+if [[ -d /tmp/.X11-unix ]]; then
+  DISPLAY_MOUNTS+=( -v /tmp/.X11-unix:/tmp/.X11-unix:rw )
+fi
+
 docker run --rm --runtime nvidia \
   --ipc=host \
+  -e "DISPLAY=${DISPLAY:-:0}" \
   -e VIDEO_WIDTH -e VIDEO_HEIGHT -e VIDEO_FPS -e INFER_FPS -e ENGINE_CACHE \
   "${OPENCV_MOUNTS[@]}" \
+  "${DISPLAY_MOUNTS[@]}" \
   -v "$PWD:/workspace" \
   --entrypoint /workspace/run_jetson_pipeline.sh \
   "$IMAGE" "$@"

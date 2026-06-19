@@ -37,6 +37,22 @@ chmod +x build_and_run_jetson.sh run_jetson_pipeline.sh
   /workspace/output_jetson.mkv
 ```
 
+Hiển thị detection trực tiếp lên màn hình HDMI thay vì ghi file:
+
+```bash
+./build_and_run_jetson.sh \
+  /workspace/test_video.mp4 \
+  /workspace/yolo11n.onnx \
+  display
+```
+
+Chế độ này ưu tiên `nvoverlaysink` với NVMM để xuất hình bằng phần cứng Jetson.
+Nếu phải fallback sang X11 và bị lỗi quyền display, chạy một lần trên host:
+
+```bash
+xhost +local:root
+```
+
 Nếu host là JetPack/L4T 32.7.4, có thể chọn base tag cùng phiên bản:
 
 ```bash

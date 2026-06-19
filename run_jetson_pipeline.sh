@@ -54,7 +54,19 @@ INFERENCE=(
   onnxtracker tracker-algorithm=bytetrack ! ov.sink_meta
 )
 
-if [[ -n "$OUTPUT" ]]; then
+if [[ "$OUTPUT" == "display" ]]; then
+  echo "Displaying annotated video on HDMI"
+  if gst-inspect-1.0 nvvidconv >/dev/null 2>&1 && gst-inspect-1.0 nvoverlaysink >/dev/null 2>&1; then
+    gst-launch-1.0 -e "${COMMON[@]}" ! 'video/x-raw,format=I420' ! \
+      nvvidconv ! 'video/x-raw(memory:NVMM),format=NV12' ! \
+      nvoverlaysink sync=false \
+      "${INFERENCE[@]}"
+  else
+    echo "nvoverlaysink unavailable; falling back to X11 auto video sink" >&2
+    gst-launch-1.0 -e "${COMMON[@]}" ! autovideosink sync=false \
+      "${INFERENCE[@]}"
+  fi
+elif [[ -n "$OUTPUT" ]]; then
   if gst-inspect-1.0 nvvidconv >/dev/null 2>&1 && gst-inspect-1.0 nvv4l2h264enc >/dev/null 2>&1; then
     gst-launch-1.0 -e "${COMMON[@]}" ! 'video/x-raw,format=I420' ! \
       nvvidconv ! 'video/x-raw(memory:NVMM),format=NV12' ! \
