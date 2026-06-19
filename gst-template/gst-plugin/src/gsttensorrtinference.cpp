@@ -202,8 +202,10 @@ static GstFlowReturn transform(GstBaseTransform* base, GstBuffer* inbuf, GstBuff
   cv::Mat fp32; rgb.convertTo(fp32, CV_32F, 1.0 / 255.0);
   std::vector<cv::Mat> channels; cv::split(fp32, channels);
   std::vector<float> chw; chw.reserve(state->input_elements);
-  for (const auto& channel : channels)
-    chw.insert(chw.end(), reinterpret_cast<float*>(channel.datastart), reinterpret_cast<float*>(channel.dataend));
+  for (const auto& channel : channels) {
+    const float* channel_data = channel.ptr<float>(0);
+    chw.insert(chw.end(), channel_data, channel_data + channel.total());
+  }
   std::vector<float> result(state->output_elements);
   bool ok = cuda_ok(cudaMemcpyAsync(state->bindings[state->input_index], chw.data(),
       chw.size() * sizeof(float), cudaMemcpyHostToDevice, state->stream), GST_ELEMENT(self), "upload input") &&

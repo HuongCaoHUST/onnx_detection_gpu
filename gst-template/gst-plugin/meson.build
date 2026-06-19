@@ -35,31 +35,27 @@ else
     dependencies: [cuda_dep, nvinfer_dep, nvonnxparser_dep])
 endif
 
-# Plugin 1
-plugin_sources = [
-  'src/gstplugin.c'
-  ]
+# Template/example plugins use registration helpers introduced after GStreamer
+# 1.14. They are unrelated to detection and are omitted on JetPack 4.
+if inference_backend == 'onnxruntime'
+  plugin_sources = ['src/gstplugin.c']
+  gstpluginexample = library('gstplugin',
+    plugin_sources,
+    c_args: plugin_c_args,
+    dependencies : [gst_dep],
+    install : true,
+    install_dir : plugins_install_dir,
+  )
 
-gstpluginexample = library('gstplugin',
-  plugin_sources,
-  c_args: plugin_c_args,
-  dependencies : [gst_dep],
-  install : true,
-  install_dir : plugins_install_dir,
-)
-
-# Plugin 2 (audio filter example)
-audiofilter_sources = [
-  'src/gstaudiofilter.c',
-  ]
-
-gstaudiofilterexample = library('gstaudiofilterexample',
-  audiofilter_sources,
-  c_args: plugin_c_args,
-  dependencies : [gst_dep, gstaudio_dep],
-  install : true,
-  install_dir : plugins_install_dir,
-)
+  audiofilter_sources = ['src/gstaudiofilter.c']
+  gstaudiofilterexample = library('gstaudiofilterexample',
+    audiofilter_sources,
+    c_args: plugin_c_args,
+    dependencies : [gst_dep, gstaudio_dep],
+    install : true,
+    install_dir : plugins_install_dir,
+  )
+endif
 
 # The onnxinference Plugin
 if inference_backend == 'onnxruntime'
@@ -139,10 +135,15 @@ gstonnxoverlayexample = library('gstonnxoverlay',
 # No external library required. Sources live in src/bytetrack/.
 # Eigen3 is provided by the host package libeigen3-dev.
 # ---------------------------------------------------------------------------
-eigen_dep = dependency('eigen3', required: true)
-bytetrack_inc = include_directories(
-  'src/bytetrack',         # so #include "ByteTrack/xxx.h" resolves
-)
+tracker_deps = [gst_dep, gstbase_dep, opencv_dep]
+if inference_backend == 'tensorrt'
+  eigen_dep = dependency('eigen3', required: true)
+  tracker_deps += [eigen_dep]
+  bytetrack_inc = include_directories('src/bytetrack')
+else
+  # Preserve the existing desktop build, which carries its own Eigen headers.
+  bytetrack_inc = include_directories('src/bytetrack', 'third_party/eigen')
+endif
 
 # The onnxtracker Plugin (ByteTrack sources compiled inline)
 gstonnxtracker_sources = [
@@ -161,7 +162,7 @@ gstonnxtrackerexample = library('gstonnxtracker',
   c_args: plugin_c_args,
   cpp_args: plugin_c_args + ['-std=c++17'],
   include_directories: bytetrack_inc,
-  dependencies : [gst_dep, gstbase_dep, opencv_dep, eigen_dep],
+  dependencies : tracker_deps,
   link_with: gstonnxmeta_lib,
   install : true,
   install_dir : plugins_install_dir,
