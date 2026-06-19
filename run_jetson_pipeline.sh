@@ -29,8 +29,18 @@ gst-inspect-1.0 onnxinference >/dev/null
 echo "TensorRT detection: input=$INPUT model=$MODEL ${WIDTH}x${HEIGHT}@${FPS}, inference=${INFER_FPS} FPS"
 echo "The first run builds the FP16 engine cache and can take several minutes: $ENGINE"
 
+if gst-inspect-1.0 nvvidconv >/dev/null 2>&1; then
+  # decodebin normally selects nvv4l2decoder on Jetson. Its NVMM output must be
+  # downloaded to system memory before the custom OpenCV/GStreamer elements.
+  DECODE_CONVERT=(nvvidconv ! 'video/x-raw,format=BGRx' ! videoconvert)
+else
+  # Software decoders already produce system-memory frames.
+  export GST_PLUGIN_FEATURE_RANK="nvv4l2decoder:NONE${GST_PLUGIN_FEATURE_RANK:+,$GST_PLUGIN_FEATURE_RANK}"
+  DECODE_CONVERT=(videoconvert)
+fi
+
 COMMON=(
-  filesrc "location=$INPUT" ! decodebin ! videoconvert ! videorate !
+  filesrc "location=$INPUT" ! decodebin ! "${DECODE_CONVERT[@]}" ! videorate !
   "video/x-raw,framerate=${FPS}/1" ! tee name=t
   t. ! queue max-size-buffers=8 leaky=downstream !
   onnxoverlay name=ov motion-compensation=linear ! videoconvert
