@@ -137,11 +137,11 @@ gstonnxoverlayexample = library('gstonnxoverlay',
 # ---------------------------------------------------------------------------
 # ByteTrack – compiled inline as part of the tracker plugin.
 # No external library required. Sources live in src/bytetrack/.
-# Eigen3 (header-only) is bundled in third_party/eigen/.
+# Eigen3 is provided by the host package libeigen3-dev.
 # ---------------------------------------------------------------------------
+eigen_dep = dependency('eigen3', required: true)
 bytetrack_inc = include_directories(
   'src/bytetrack',         # so #include "ByteTrack/xxx.h" resolves
-  'third_party/eigen',     # so #include "Eigen/Dense" resolves
 )
 
 # The onnxtracker Plugin (ByteTrack sources compiled inline)
@@ -161,7 +161,7 @@ gstonnxtrackerexample = library('gstonnxtracker',
   c_args: plugin_c_args,
   cpp_args: plugin_c_args + ['-std=c++17'],
   include_directories: bytetrack_inc,
-  dependencies : [gst_dep, gstbase_dep, opencv_dep],
+  dependencies : [gst_dep, gstbase_dep, opencv_dep, eigen_dep],
   link_with: gstonnxmeta_lib,
   install : true,
   install_dir : plugins_install_dir,

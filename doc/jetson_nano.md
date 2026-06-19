@@ -23,7 +23,7 @@ từ JetPack/SDK Manager, không cài ba gói này trong `l4t-base`:
 ```bash
 sudo apt-get update
 sudo apt-get install -y build-essential meson ninja-build pkg-config \
-  libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libopencv-dev
+  libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libopencv-dev libeigen3-dev
 test -f /usr/include/aarch64-linux-gnu/NvInfer.h -o -f /usr/include/NvInfer.h
 ```
 
