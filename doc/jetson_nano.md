@@ -17,6 +17,16 @@ sudo jetson_clocks
 Nano 4 GB nên có swap trước khi build image/engine TensorRT. Model phải là YOLO11
 ONNX input cố định `1x3x640x640`, một output kiểu `[1,84,8400]`.
 
+Cài công cụ compile trên Jetson host. CUDA và TensorRT development phải được cài
+từ JetPack/SDK Manager, không cài ba gói này trong `l4t-base`:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y build-essential meson ninja-build pkg-config \
+  libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libopencv-dev
+test -f /usr/include/aarch64-linux-gnu/NvInfer.h -o -f /usr/include/NvInfer.h
+```
+
 ## Build và chạy
 
 ```bash
@@ -36,6 +46,11 @@ docker build --build-arg L4T_TAG=r32.7.4 -f Dockerfile.jetson -t onnx-detection-
 Lần chạy đầu TensorRT build file `yolo11n.nano.fp16.engine`, có thể mất vài phút.
 Các lần sau dùng cache và khởi động nhanh hơn. Engine chỉ dùng lại trên đúng dòng
 Jetson/TensorRT đã tạo ra nó; xóa file engine sau khi đổi model hoặc JetPack.
+
+Script compile plugin trên Jetson host rồi mount thư mục build vào container.
+Inference, GStreamer pipeline và ghi output vẫn chạy hoàn toàn trong container.
+Lý do là `l4t-base` nhận CUDA/TensorRT qua `--runtime nvidia` ở lúc chạy, không có
+repository chứa NVIDIA development package trong bước `docker build`.
 
 Pipeline detection:
 

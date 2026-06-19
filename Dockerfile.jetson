@@ -6,17 +6,8 @@ FROM nvcr.io/nvidia/l4t-base:${L4T_TAG}
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
     ca-certificates \
-    libgstreamer1.0-dev \
-    libgstreamer-plugins-base1.0-dev \
-    cuda-cudart-dev-10-2 \
-    libnvinfer-dev \
-    libnvonnxparsers-dev \
     libopencv-dev \
-    meson \
-    ninja-build \
-    pkg-config \
     gstreamer1.0-tools \
     gstreamer1.0-plugins-base \
     gstreamer1.0-plugins-good \
@@ -24,17 +15,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gstreamer1.0-plugins-ugly \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /opt/src
-COPY gst-template ./gst-template
-
-RUN meson setup gst-template/build-jetson gst-template \
-      --buildtype=release \
-      --prefix=/opt/onnx-gst \
-      -Dinference_backend=tensorrt \
-    && ninja -C gst-template/build-jetson \
-    && ninja -C gst-template/build-jetson install
-
-ENV GST_PLUGIN_PATH=/opt/onnx-gst/lib/aarch64-linux-gnu/gstreamer-1.0:/opt/onnx-gst/lib/gstreamer-1.0
+# CUDA and TensorRT libraries are injected from the Jetson host by
+# nvidia-container-runtime. The plugin itself is compiled on the host and mounted
+# with the workspace because l4t-base does not expose NVIDIA development packages
+# while docker build is running.
+ENV GST_PLUGIN_PATH=/workspace/gst-template/build-jetson/gst-plugin
 ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/lib/aarch64-linux-gnu/tegra
 
 COPY run_jetson_pipeline.sh /usr/local/bin/run-jetson-detection
