@@ -1,0 +1,13 @@
+.git
+.agents
+.codex
+build
+builddir
+gst-template/build*
+*.mp4
+*.mkv
+*.avi
+*.onnx
+*.onnx.data
+*.engine
+tracking.log

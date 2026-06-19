@@ -12,13 +12,28 @@ configure_file(output : 'config.h', configuration : cdata)
 gstaudio_dep = dependency('gstreamer-audio-1.0',
     fallback: ['gst-plugins-base', 'audio_dep'])
 
-opencv_dep = dependency('opencv4', required: true)
-# Use the newer version found in /opt/onnxruntime
-ort_root = '/opt/onnxruntime'
-ort_lib_dir = join_paths(ort_root, 'lib')
-ort_inc = include_directories(join_paths(ort_root, 'include'))
-ort_lib = cc.find_library('onnxruntime', dirs : ort_lib_dir, required: true)
-onnxruntime_dep = declare_dependency(include_directories: ort_inc, dependencies: ort_lib)
+opencv_dep = dependency('opencv4', required: false)
+if not opencv_dep.found()
+  opencv_dep = dependency('opencv', required: true)
+endif
+inference_backend = get_option('inference_backend')
+
+if inference_backend == 'onnxruntime'
+  # Desktop/Raspberry Pi backend used by the existing project.
+  ort_root = get_option('prefix') == '/usr/local' ? '/opt/onnxruntime' : get_option('prefix')
+  ort_lib_dir = join_paths(ort_root, 'lib')
+  ort_inc = include_directories(join_paths(ort_root, 'include'))
+  ort_lib = cc.find_library('onnxruntime', dirs : ort_lib_dir, required: true)
+  onnxruntime_dep = declare_dependency(include_directories: ort_inc, dependencies: ort_lib)
+else
+  cuda_dep = cc.find_library('cudart', dirs: ['/usr/local/cuda/lib64'], required: true)
+  nvinfer_dep = cc.find_library('nvinfer', required: true)
+  nvonnxparser_dep = cc.find_library('nvonnxparser', required: true)
+  tensorrt_inc = include_directories('/usr/include/aarch64-linux-gnu', '/usr/local/cuda/include')
+  tensorrt_dep = declare_dependency(
+    include_directories: tensorrt_inc,
+    dependencies: [cuda_dep, nvinfer_dep, nvonnxparser_dep])
+endif
 
 # Plugin 1
 plugin_sources = [
@@ -47,15 +62,19 @@ gstaudiofilterexample = library('gstaudiofilterexample',
 )
 
 # The onnxinference Plugin
-gstonnxinference_sources = [
-  'src/gstonnxinference.cpp',
-]
+if inference_backend == 'onnxruntime'
+  gstonnxinference_sources = ['src/gstonnxinference.cpp']
+  inference_dep = onnxruntime_dep
+else
+  gstonnxinference_sources = ['src/gsttensorrtinference.cpp']
+  inference_dep = tensorrt_dep
+endif
 
 gstonnxinferenceexample = library('gstonnxinference',
   gstonnxinference_sources,
   c_args: plugin_c_args,
   cpp_args: plugin_c_args,
-  dependencies : [gst_dep, gstbase_dep, opencv_dep, onnxruntime_dep],
+  dependencies : [gst_dep, gstbase_dep, opencv_dep, inference_dep],
   install : true,
   install_dir : plugins_install_dir,
 )
@@ -70,20 +89,19 @@ gstonnxmeta_lib = library('gstonnxmeta-shared',
   install : false,
 )
 
-# The onnxclassifier Plugin
-gstonnxclassifier_sources = [
-  'src/gstonnxclassifier.cpp',
-]
-
-gstonnxclassifierexample = library('gstonnxclassifier',
-  gstonnxclassifier_sources,
-  c_args: plugin_c_args,
-  cpp_args: plugin_c_args,
-  dependencies : [gst_dep, gstbase_dep, opencv_dep, onnxruntime_dep],
-  link_with: gstonnxmeta_lib,
-  install : true,
-  install_dir : plugins_install_dir,
-)
+if inference_backend == 'onnxruntime'
+  # Classification is intentionally omitted from the first Jetson/Nano image.
+  gstonnxclassifier_sources = ['src/gstonnxclassifier.cpp']
+  gstonnxclassifierexample = library('gstonnxclassifier',
+    gstonnxclassifier_sources,
+    c_args: plugin_c_args,
+    cpp_args: plugin_c_args,
+    dependencies : [gst_dep, gstbase_dep, opencv_dep, onnxruntime_dep],
+    link_with: gstonnxmeta_lib,
+    install : true,
+    install_dir : plugins_install_dir,
+  )
+endif
 
 # The onnxpostprocess Plugin
 gstonnxpostprocess_sources = [
@@ -94,7 +112,7 @@ gstonnxpostprocessexample = library('gstonnxpostprocess',
   gstonnxpostprocess_sources,
   c_args: plugin_c_args,
   cpp_args: plugin_c_args,
-  dependencies : [gst_dep, gstbase_dep, opencv_dep, onnxruntime_dep],
+  dependencies : [gst_dep, gstbase_dep, opencv_dep],
   link_with: gstonnxmeta_lib,
   install : true,
   install_dir : plugins_install_dir,

@@ -1,0 +1,5 @@
+option('inference_backend',
+  type: 'combo',
+  choices: ['onnxruntime', 'tensorrt'],
+  value: 'onnxruntime',
+  description: 'Backend used by the onnxinference GStreamer element')
