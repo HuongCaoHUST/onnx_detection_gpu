@@ -21,6 +21,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # while docker build is running.
 ENV GST_PLUGIN_PATH=/workspace/gst-template/build-jetson/gst-plugin
 ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/lib/aarch64-linux-gnu/tegra
+# Jetson/Bionic can exhaust the static TLS slots when GStreamer loads OpenCV,
+# libav and OpenMP in plugin-scanner. Loading libgomp first reserves its slot.
+ENV LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgomp.so.1
 
 COPY run_jetson_pipeline.sh /usr/local/bin/run-jetson-detection
 RUN chmod +x /usr/local/bin/run-jetson-detection

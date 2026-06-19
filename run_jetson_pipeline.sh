@@ -47,12 +47,12 @@ INFERENCE=(
 if [[ -n "$OUTPUT" ]]; then
   if gst-inspect-1.0 nvv4l2h264enc >/dev/null 2>&1; then
     gst-launch-1.0 -e "${COMMON[@]}" ! 'video/x-raw,format=I420' ! \
-      nvv4l2h264enc bitrate=4000000 ! h264parse ! matroskamux ! "filesink location=$OUTPUT" \
+      nvv4l2h264enc bitrate=4000000 ! h264parse ! matroskamux ! filesink "location=$OUTPUT" \
       "${INFERENCE[@]}"
   else
     echo "nvv4l2h264enc unavailable; using CPU x264 encoder" >&2
     gst-launch-1.0 -e "${COMMON[@]}" ! 'video/x-raw,format=I420' ! \
-      x264enc tune=zerolatency speed-preset=ultrafast ! h264parse ! matroskamux ! "filesink location=$OUTPUT" \
+      x264enc tune=zerolatency speed-preset=ultrafast ! h264parse ! matroskamux ! filesink "location=$OUTPUT" \
       "${INFERENCE[@]}"
   fi
 else
